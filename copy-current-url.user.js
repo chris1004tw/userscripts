@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.1
-// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 自動轉換為 fxTwitter）
+// @version      0.2
+// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 自動轉換為 fxTwitter，Shopee 自動轉換為短網址）
 // @author       chris1004tw
 // @match        *://*/*
 // @grant        GM_setClipboard
@@ -11,6 +11,7 @@
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js
 // ==/UserScript==
 // Co-authored with Claude Opus 4.5
+// Shopee 短網址轉換參考自 https://github.com/gnehs/userscripts
 
 (function () {
     'use strict';
@@ -56,7 +57,7 @@
     }
 
     // 顯示通知
-    async function showNotification(url, isFxTwitter = false) {
+    async function showNotification(url, title = '已複製網址！') {
         try {
             await waitForBody();
             ensureStyleExists();
@@ -65,7 +66,7 @@
 
             // 使用 DOM API 而非 innerHTML，避免 Trusted Types CSP 問題
             const titleDiv = document.createElement('div');
-            titleDiv.textContent = isFxTwitter ? '已複製 fxTwitter 網址！' : '已複製網址！';
+            titleDiv.textContent = title;
             titleDiv.style.cssText = 'font-weight: bold; margin-bottom: 4px;';
 
             const urlDiv = document.createElement('div');
@@ -117,17 +118,49 @@
             .replace(/https?:\/\/(www\.)?twitter\.com/, 'https://fxtwitter.com');
     }
 
+    // 檢查是否為 Shopee 網站
+    function isShopee() {
+        return window.location.hostname === 'shopee.tw';
+    }
+
+    // 將 Shopee 網址轉換為短網址
+    // 參考自 https://github.com/gnehs/userscripts
+    function convertToShopeeShort(url) {
+        const parser = document.createElement('a');
+        parser.href = url;
+
+        // 取路徑最後一段，以 - 分隔
+        const pathParts = parser.pathname.split('-');
+        const lastPart = pathParts[pathParts.length - 1];
+
+        // 檢查是否為 i.shopId.itemId 格式
+        const shopeePath = lastPart.split('.');
+        if (shopeePath[0] === 'i' && shopeePath.length === 3) {
+            return 'https://shopee.tw/product/' + shopeePath[1] + '/' + shopeePath[2];
+        }
+
+        // 非商品頁面，回傳原網址
+        return url;
+    }
+
     // 複製網址並顯示通知
     function copyCurrentUrl() {
         let url = window.location.href;
-        const isFxConverted = isXTwitter();
+        let notificationTitle = '已複製網址！';
 
-        if (isFxConverted) {
+        if (isXTwitter()) {
             url = convertToFxTwitter(url);
+            notificationTitle = '已複製 fxTwitter 網址！';
+        } else if (isShopee()) {
+            const shortUrl = convertToShopeeShort(url);
+            if (shortUrl !== url) {
+                url = shortUrl;
+                notificationTitle = '已複製 Shopee 短網址！';
+            }
         }
 
         GM_setClipboard(url, 'text');
-        showNotification(url, isFxConverted);
+        showNotification(url, notificationTitle);
     }
 
     // ========== X/Twitter 專屬功能（按鈕） ==========
