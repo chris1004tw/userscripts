@@ -13,6 +13,7 @@
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js
 // ==/UserScript==
+// Co-authored with Claude Opus 4.5
 
 (function () {
     'use strict';

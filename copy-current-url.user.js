@@ -10,6 +10,7 @@
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js
 // ==/UserScript==
+// Co-authored with Claude Opus 4.5
 
 (function () {
     'use strict';
