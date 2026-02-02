@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.1
+// @version      0.2
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -121,8 +121,33 @@
             /* 通配符強制套用所有元素（排除表單元素，由下方規則單獨處理）*/
             /* data-no-font-parent: icon 元素的父元素，避免子元素繼承 AppleGothic */
             /* 字體 stack 包含 Apple emoji/icon 字體作為 fallback，確保 SF Symbols 可顯示 */
-            html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button) {
+            /* 排除程式碼區域（code, pre, [data-hpc], react-code/blob 類別） */
+            html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button):not(code):not(pre):not(kbd):not(samp):not(tt):not([data-hpc]):not([class*="react-code"]):not([class*="react-blob"]):not([class*="blob-code"]):not([class*="blob-num"]):not([class*="highlight"]):not([class*="CodeMirror"]):not([class*="monaco"]):not([class*="pl-"]) {
                 font-family: AppleGothic, AppleGothicSC, "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
+            }
+
+            /* GitHub 程式碼區域 - 使用 Cascadia Code 等寬字體 */
+            [data-hpc="true"],
+            [data-hpc="true"] *,
+            .react-code-lines,
+            .react-code-lines *,
+            .react-code-text,
+            .react-file-line,
+            .react-line-number,
+            [class*="react-code"],
+            [class*="react-blob"],
+            [class*="pl-"],
+            .blob-code,
+            .blob-code *,
+            .blob-num,
+            .highlight pre,
+            .highlight code,
+            code,
+            pre,
+            kbd,
+            samp,
+            tt {
+                font-family: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", monospace, AppleGothic, AppleGothicSC !important;
             }
 
             /* 表單元素額外強制（排除 checkbox/radio，因為它們常用 icon 字體顯示勾選狀態）*/
