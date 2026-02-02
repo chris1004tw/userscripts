@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.2
-// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 自動轉換為 fxTwitter，Shopee 自動轉換為短網址）
+// @version      0.3
+// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 轉 fxTwitter，PChome 轉 Pancake，Shopee 轉短網址）
 // @author       chris1004tw
 // @match        *://*/*
 // @grant        GM_setClipboard
@@ -12,6 +12,8 @@
 // ==/UserScript==
 // Co-authored with Claude Opus 4.5
 // Shopee 短網址轉換參考自 https://github.com/gnehs/userscripts
+// PChome 短網址服務由 https://p.pancake.tw/ 提供
+// X/Twitter 短網址服務由 https://fxtwitter.com/ 提供
 
 (function () {
     'use strict';
@@ -112,6 +114,7 @@
     }
 
     // 將 X/Twitter 網址轉換為 fxTwitter
+    // 嵌入修復服務由 https://fxtwitter.com/ 提供
     function convertToFxTwitter(url) {
         return url
             .replace(/https?:\/\/(www\.)?x\.com/, 'https://fxtwitter.com')
@@ -143,6 +146,23 @@
         return url;
     }
 
+    // 檢查是否為 PChome 24h 網站
+    function isPChome24h() {
+        return window.location.hostname === '24h.pchome.com.tw';
+    }
+
+    // 將 PChome 24h 網址轉換為 pancake.tw 短網址
+    // 短網址服務由 https://p.pancake.tw/ 提供
+    function convertToPancake(url) {
+        // 只處理商品頁面 /prod/xxx
+        const match = url.match(/^https?:\/\/24h\.pchome\.com\.tw(\/prod\/[^?#]+)/);
+        if (match) {
+            return 'https://p.pancake.tw' + match[1];
+        }
+        // 非商品頁面，回傳原網址
+        return url;
+    }
+
     // 複製網址並顯示通知
     function copyCurrentUrl() {
         let url = window.location.href;
@@ -156,6 +176,12 @@
             if (shortUrl !== url) {
                 url = shortUrl;
                 notificationTitle = '已複製 Shopee 短網址！';
+            }
+        } else if (isPChome24h()) {
+            const shortUrl = convertToPancake(url);
+            if (shortUrl !== url) {
+                url = shortUrl;
+                notificationTitle = '已複製 PChome Pancake 網址！';
             }
         }
 
