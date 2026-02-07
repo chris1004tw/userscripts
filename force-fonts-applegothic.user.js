@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.3
+// @version      0.3.1
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -161,7 +161,7 @@
 
     // ===== 常數與狀態 =====
     // 詞邊界 \b 避免誤判（如 "lexicon" 不應匹配 "icon"）
-    const iconClassPattern = /\b(icon|iconfont|icomoon|fontawesome|material|glyph|symbol|octicon|feather|ionicon|themify|alibaba|anticon|boxicon)\b|global-iconfont/i;
+    const iconClassPattern = /\b(icon|iconfont|icomoon|fontawesome|material|glyph|symbol|octicon|feather|ionicon|themify|alibaba|anticon|boxicon)\b|global-iconfont|woo-font/i;
     // font-family 檢測用（不需要詞邊界）
     const iconFontPattern = /icon|iconfont|icomoon|fontawesome|material|glyph|symbol|boxicon/i;
     const iconPrefixPattern = /^(fa|fas|far|fal|fad|fab|bi|ri|mdi|mi|oi|ti|si|gi|ai|di|fi|hi|pi|vi|wi|ci|bx|bxs|bxl)-/;
@@ -362,7 +362,8 @@
         '[role="img"]',
         '[data-icon]',
         '[class*="bx"]',
-        '[class*="boxicon"]'
+        '[class*="boxicon"]',
+        '[class*="woo-font"]'
     ].join(', ');
 
     // ===== 主處理函數 =====
@@ -411,14 +412,17 @@
             for (const el of batch) processElement(el);
         }
 
+        // 合併文字元素與 icon 候選選擇器，讓動態新增的 icon 也能被偵測
+        const observerSelector = `${selector}, ${iconCandidateSelector}`;
+
         new MutationObserver(mutations => {
             for (let i = 0; i < mutations.length; i++) {
                 const nodes = mutations[i].addedNodes;
                 for (let j = 0; j < nodes.length; j++) {
                     const n = nodes[j];
                     if (n.nodeType !== 1) continue;
-                    if (n.matches?.(selector)) queue.add(n);
-                    const children = n.querySelectorAll?.(selector);
+                    if (n.matches?.(observerSelector)) queue.add(n);
+                    const children = n.querySelectorAll?.(observerSelector);
                     if (children) {
                         for (let k = 0; k < children.length; k++) queue.add(children[k]);
                     }
