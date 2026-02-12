@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.3.1
+// @version      0.3.2
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -314,10 +314,11 @@
         // 2. 如果是需要跳過的表單元素，跳過
         if (shouldSkipElement(el)) return 0;
 
-        // 3. 如果有 inline style 設定 font-family
-        if (el.style.fontFamily) {
-            // 若為自訂 @font-face（如淘寶反爬蟲字體），標記排除避免亂碼
-            if (isCustomWebFont(el.style.fontFamily)) {
+        // 3. 如果有任何 inline style（包含沒設 font-family 的情況）
+        // inline !important 能打贏所有 CSS !important 規則，確保 CMS 生成的內容也被覆蓋
+        if (el.hasAttribute('style')) {
+            // 若已有 font-family 且為自訂 @font-face（如淘寶反爬蟲字體），標記排除避免亂碼
+            if (el.style.fontFamily && isCustomWebFont(el.style.fontFamily)) {
                 el.setAttribute('data-no-font', '');
                 return 0;
             }
