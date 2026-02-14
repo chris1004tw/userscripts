@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.3
+// @version      0.4
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -13,7 +13,7 @@
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js
 // ==/UserScript==
-// Co-authored with Claude Opus 4.6
+// Co-authored with Claude Opus 4.6 Thinking
 
 (function () {
     'use strict';
@@ -150,6 +150,7 @@
         GM_xmlhttpRequest({
             method: 'GET',
             url: RULE_URL,
+            timeout: 10000,
             onload: (res) => {
                 if (res.status === 200) {
                     try {
@@ -159,7 +160,9 @@
                         GM_setValue('cacheTime', Date.now());
                     } catch { }
                 }
-            }
+            },
+            onerror: () => { },
+            ontimeout: () => { }
         });
     }
 
@@ -204,6 +207,11 @@
 
     // popstate 事件（上一頁/下一頁）
     window.addEventListener('popstate', cleanCurrentURL);
+
+    // bfcache 恢復時重新清理 URL
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) cleanCurrentURL();
+    });
 
     // 清理當前頁面
     cleanCurrentURL();
