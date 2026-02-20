@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini 固定使用模型
 // @namespace    https://chris.taipei
-// @version      0.3
+// @version      0.4
 // @description  自動將 Gemini 模型切換為 Pro，並提供選單固定切換模型
 // @author       chris1004tw
 // @match        https://gemini.google.com/*
