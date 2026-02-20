@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4
+// @version      0.4.1
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -426,14 +426,21 @@
         // 立即注入 CSS（最重要！）
         initStyles();
 
-        // 等 DOM 準備好後掃描 icon
-        if (document.body) {
+        // 等 DOM 準備好後掃描 icon（多重備案，防止 MV3 延遲注入漏掉事件）
+        let domReady = false;
+        function onDomReady() {
+            if (domReady || !document.body) return;
+            domReady = true;
             processAll();
             setupMutationObserver();
+        }
+
+        if (document.readyState !== 'loading') {
+            onDomReady();
         } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                processAll();
-                setupMutationObserver();
+            document.addEventListener('DOMContentLoaded', onDomReady, { once: true });
+            document.addEventListener('readystatechange', () => {
+                if (document.readyState !== 'loading') onDomReady();
             });
         }
     }
