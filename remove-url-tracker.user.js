@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4
+// @version      0.4.1
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -158,6 +158,8 @@
                         remoteRules = compileRemoteRules(data);
                         GM_setValue('cachedRules', res.responseText);
                         GM_setValue('cacheTime', Date.now());
+                        // 新規則載入後重新清理當前 URL
+                        cleanCurrentURL();
                     } catch { }
                 }
             },
@@ -213,6 +215,9 @@
         if (e.persisted) cleanCurrentURL();
     });
 
-    // 清理當前頁面
+    // 清理當前頁面（多時機觸發，防止 MV3 延遲注入）
     cleanCurrentURL();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', cleanCurrentURL, { once: true });
+    }
 })();
