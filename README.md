@@ -31,7 +31,7 @@
 
 | 名稱 | 說明 | 版本 | 安裝 |
 | :--- | :--- | :---: | :--- |
-| 替換字體為 AppleGothic | 將頁面字體改為 AppleGothic (簡體用 AppleGothicSC)<br/>還原字體因替換而對 Icon Font 造成的影響。<br/>程式碼區域使用 Cascadia Code 等寬字體。<br/>支援黑名單管理，可針對特定網站停用。 | 0.4.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
+| 替換字體為 AppleGothic | 將頁面字體改為 AppleGothic (簡體用 AppleGothicSC)<br/>還原字體因替換而對 Icon Font 造成的影響。<br/>程式碼區域使用 Cascadia Code 等寬字體。<br/>支援黑名單管理，可針對特定網站停用。 | 0.4.2 | [Install](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
 
 ---
 
