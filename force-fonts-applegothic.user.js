@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.1
+// @version      0.4.2
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -19,7 +19,7 @@
     'use strict';
 
     // ===== 目標字體（統一定義）=====
-    const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
+    const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
 
     // ===== Canvas API 攔截（必須最早執行）=====
     // Canvas 文字是用 JS 繪製的，CSS 無法控制，需要攔截 API
@@ -120,6 +120,8 @@
         GM_addStyle(`
             @font-face { font-family: 'AppleGothic'; src: local('AppleGothic'); }
             @font-face { font-family: 'AppleGothicSC'; src: local('AppleGothicSC'); }
+            /* 韓文 Hangul 字元強制使用 Malgun Gothic（AppleGothic cmap 聲稱涵蓋但字形缺失） */
+            @font-face { font-family: 'AppleGothic'; src: local('Malgun Gothic'); unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF; }
 
             /* 程式碼區域 - Cascadia Code 等寬字體（先宣告） */
             /* 廣泛子代選擇器用 :where() 包裹，避免非程式碼子元素被套用 monospace */
@@ -149,12 +151,12 @@
             /* 主規則：:where() 使特異性歸零（後宣告，同特異性時覆蓋程式碼區域的 :where() 子代選擇器） */
             /* 移除程式碼相關 :not()，靠宣告順序處理，減少 14 個 :not() 條件 */
             :where(html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button)) {
-                font-family: AppleGothic, AppleGothicSC, "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
+                font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
             }
 
             /* 表單元素額外強制（排除 checkbox/radio，因為它們常用 icon 字體顯示勾選狀態）*/
             select, option, input:not([type="checkbox"]):not([type="radio"]), textarea, button {
-                font-family: AppleGothic, AppleGothicSC, "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
+                font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
             }
         `);
     }
