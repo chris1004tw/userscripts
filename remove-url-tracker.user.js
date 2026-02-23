@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.1
+// @version      0.4.2
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -50,6 +50,17 @@
         {
             pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?shopee\.[a-z.]+/i,
             params: new Set(["seoName"])
+        },
+        {
+            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?trip\.com/i,
+            params: new Set([
+                "cityEnName", "cityId", "ages", "barcurr", "mincurr", "minprice",
+                "fgt", "subStamp", "isCT", "isFlexible", "isFirstEnterDetail",
+                "hoteluniquekey", "masterhotelid_tracelogid",
+                "detailFilters", "hotelType", "display",
+                "roomkey", "roomToken", "msr", "mproom",
+                "trip_sub1", "hasAidInUrl"
+            ])
         }
     ];
 
