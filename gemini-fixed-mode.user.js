@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini 固定使用模型
 // @namespace    https://chris.taipei
-// @version      0.4
+// @version      0.4.1
 // @description  自動將 Gemini 模型切換為 Pro，並提供選單固定切換模型
 // @author       chris1004tw
 // @match        https://gemini.google.com/*
@@ -108,11 +108,19 @@
         }
 
         switchButton.click();
-        await selectModeOption(mode);
+        const success = await selectModeOption(mode);
 
         if (style) {
             // 稍等一下再移除隱藏樣式，確保動畫不閃爍
             setTimeout(() => style.remove(), 100);
+        }
+
+        // 選完模式後自動聚焦輸入框
+        if (success) {
+            setTimeout(() => {
+                const inputEl = document.querySelector('.ql-editor[contenteditable="true"]');
+                if (inputEl) inputEl.focus();
+            }, 200);
         }
     }
 
