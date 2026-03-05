@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.2
+// @version      0.4.3
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -141,7 +141,7 @@
             .highlight pre,
             .highlight code,
             code,
-            pre,
+            pre:has(code),
             kbd,
             samp,
             tt {
@@ -265,8 +265,14 @@
         return false;
     }
 
+    // 5. <i> 元素帶有 inline font-family → icon font（如 DJI 的 quark、slick 箭頭等）
+    function hasInlineIconFont(el) {
+        return el.tagName === 'I' && el.style.fontFamily;
+    }
+
     // 主函式：漸進式 icon 檢測管線（快→慢）
     function isIconElement(el) {
+        if (hasInlineIconFont(el)) return true;
         if (hasIconClass(el)) return true;
         if (hasIconAttribute(el)) return true;
         if (hasPuaText(el)) return true;
@@ -407,7 +413,8 @@
         '[data-icon]',
         '[class*="bx"]',
         '[class*="boxicon"]',
-        '[class*="woo-font"]'
+        '[class*="woo-font"]',
+        'i[style*="font-family"]'
     ].join(', ');
 
     // ===== 主處理函數 =====
