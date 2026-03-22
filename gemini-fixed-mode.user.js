@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini 固定使用模型
 // @namespace    https://chris.taipei
-// @version      0.4.1
+// @version      0.4.3
 // @description  自動將 Gemini 模型切換為 Pro，並提供選單固定切換模型
 // @author       chris1004tw
 // @match        https://gemini.google.com/*
@@ -24,6 +24,8 @@
     ];
 
     const DEFAULT_MODE = 'pro';
+    const AUTO_RETRY_DELAY = 500;
+    const MAX_AUTO_SWITCH_ATTEMPTS = 3;
 
     let mainMenuId = null; // 儲存主選單的 ID
 
@@ -70,6 +72,11 @@
         return MODES.find(m => m.key === key) || MODES[0];
     }
 
+    function updateMainMenuLabel(mode = getCurrentMode()) {
+        if (mainMenuId == null) return;
+        GM_registerMenuCommand(`🔄 固定模式（${mode.icon} ${mode.name}）`, cycleMode, { id: mainMenuId });
+    }
+
     // 提取共用的模式選取邏輯
     async function selectModeOption(mode) {
         const option = await waitForElement(`[data-test-id="${mode.testId}"]`, 1000);
@@ -87,50 +94,58 @@
 
     async function switchToMode(modeKey, silent = false) {
         const mode = MODES.find(m => m.key === modeKey);
-        if (!mode) return;
+        if (!mode) return false;
 
         const switchButton = document.querySelector('button.input-area-switch');
         if (!switchButton) {
             console.log('[Gemini] 找不到模式切換按鈕');
-            return;
+            return false;
         }
 
         let style = null;
         if (silent) {
             // 靜默模式：隱藏選單彈出過程
+            document.getElementById('gemini-silent-switch')?.remove();
             style = document.createElement('style');
             style.id = 'gemini-silent-switch';
             style.textContent = `
                 .cdk-overlay-container { visibility: hidden !important; }
                 .mat-mdc-menu-panel { visibility: hidden !important; }
             `;
-            document.head.appendChild(style);
+            (document.head || document.documentElement).appendChild(style);
         }
 
-        switchButton.click();
-        const success = await selectModeOption(mode);
+        try {
+            switchButton.click();
+            const success = await selectModeOption(mode);
 
-        if (style) {
-            // 稍等一下再移除隱藏樣式，確保動畫不閃爍
-            setTimeout(() => style.remove(), 100);
-        }
+            // 選完模式後自動聚焦輸入框
+            if (success) {
+                setTimeout(() => {
+                    const inputEl = document.querySelector('.ql-editor[contenteditable="true"]');
+                    if (inputEl) inputEl.focus();
+                }, 200);
+            }
 
-        // 選完模式後自動聚焦輸入框
-        if (success) {
-            setTimeout(() => {
-                const inputEl = document.querySelector('.ql-editor[contenteditable="true"]');
-                if (inputEl) inputEl.focus();
-            }, 200);
+            return success;
+        } finally {
+            if (style) {
+                // 稍等一下再移除隱藏樣式，確保動畫不閃爍
+                setTimeout(() => style.remove(), 100);
+            }
         }
     }
 
-    function cycleMode() {
+    async function cycleMode() {
         const current = getCurrentMode();
         const next = getNextMode(current.key);
-        switchToMode(next.key, true); // 靜默切換
-
-        // 更新主選單項目顯示新的固定模式
-        GM_registerMenuCommand(`🔄 固定模式（${next.icon} ${next.name}）`, cycleMode, { id: mainMenuId });
+        let success = false;
+        try {
+            success = await switchToMode(next.key, true); // 靜默切換
+        } catch (error) {
+            console.error('[Gemini] 手動切換失敗:', error);
+        }
+        updateMainMenuLabel(success ? next : current);
     }
 
     async function autoSwitchOnLoad() {
@@ -145,8 +160,7 @@
             return true;
         }
 
-        await switchToMode(mode.key, true); // 靜默切換
-        return true;
+        return await switchToMode(mode.key, true); // 靜默切換
     }
 
     function init() {
@@ -156,11 +170,58 @@
         let lastUrl = location.href;
         let switching = false;
         let debounceTimer = null;
+        let retryTimer = null;
+
+        function clearRetryTimer() {
+            if (retryTimer == null) return;
+            clearTimeout(retryTimer);
+            retryTimer = null;
+        }
+
+        function scheduleAutoRetry(nextAttemptNumber) {
+            if (nextAttemptNumber > MAX_AUTO_SWITCH_ATTEMPTS) return;
+            clearRetryTimer();
+            retryTimer = setTimeout(() => {
+                retryTimer = null;
+                attemptAutoSwitch(nextAttemptNumber, true);
+            }, AUTO_RETRY_DELAY);
+        }
+
+        async function attemptAutoSwitch(attemptNumber = 1, isRetry = false) {
+            if (!isRetry) {
+                clearRetryTimer();
+            }
+            if (switching) return false;
+
+            const switchButton = document.querySelector('button.input-area-switch');
+            if (!switchButton) {
+                scheduleAutoRetry(attemptNumber + 1);
+                return false;
+            }
+
+            switching = true;
+            try {
+                const success = await autoSwitchOnLoad();
+                if (!success) {
+                    switching = false;
+                    scheduleAutoRetry(attemptNumber + 1);
+                } else {
+                    clearRetryTimer();
+                }
+                return success;
+            } catch (error) {
+                switching = false;
+                console.error('[Gemini] 自動切換失敗:', error);
+                scheduleAutoRetry(attemptNumber + 1);
+                return false;
+            }
+        }
 
         // 監聽 DOM 變化（SPA 導航 + 偵測切換按鈕出現）
         const observer = new MutationObserver((mutations) => {
             if (location.href !== lastUrl) {
                 lastUrl = location.href;
+                clearRetryTimer();
                 switching = false; // 重設狀態，允許再次切換
             }
 
@@ -181,11 +242,7 @@
             // debounce：避免短時間內大量觸發
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                const switchButton = document.querySelector('button.input-area-switch');
-                if (switchButton) {
-                    switching = true;
-                    autoSwitchOnLoad();
-                }
+                attemptAutoSwitch();
             }, 300);
         });
 
@@ -198,11 +255,12 @@
         window.addEventListener('beforeunload', () => {
             observer.disconnect();
             clearTimeout(debounceTimer);
+            clearRetryTimer();
         });
 
         // 初始載入：等待切換按鈕出現
         waitForElement('button.input-area-switch', 5000).then(btn => {
-            if (btn) autoSwitchOnLoad();
+            if (btn) attemptAutoSwitch();
         });
     }
 
