@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.4
+// @version      0.4.1
 // @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 轉 fxTwitter，PChome 轉 Pancake，Shopee 轉短網址）
 // @author       chris1004tw
 // @match        *://*/*
@@ -23,9 +23,13 @@
     const DELAY_RETRY = 2000;
     const DELAY_DEBOUNCE = 500;
     const NOTIFICATION_DURATION = 2000;
+    const TWEET_ACTION_GROUP_SELECTOR = 'div[role="group"]';
+    const TWEET_RELEVANT_SELECTOR = `article, ${TWEET_ACTION_GROUP_SELECTOR}`;
 
     // debounce 計時器（閉包變數，避免全域汙染）
     let fxTwitterTimeout;
+    const pendingTweetRoots = new Set();
+    let pendingFullTweetScan = false;
 
     // 只在主框架執行，避免 iframe 內重複顯示通知
     try {
@@ -223,7 +227,6 @@
         const outerContainer = document.createElement('div');
         outerContainer.setAttribute('class', 'css-175oi2r');
         outerContainer.style.cssText = 'justify-content: inherit; display: inline-grid; transform: rotate(0deg) scale(1) translate3d(0px, 0px, 0px);';
-        outerContainer.id = 'fxtwitter-copy-container';
 
         const innerContainer = document.createElement('div');
         innerContainer.setAttribute('class', 'css-175oi2r r-18u37iz r-1h0z5md');
@@ -233,7 +236,6 @@
         button.setAttribute('role', 'button');
         button.setAttribute('class', 'css-175oi2r r-1777fci r-bt1l66 r-bztko3 r-lrvibr r-1loqt21 r-1ny4l3l');
         button.type = 'button';
-        button.id = 'fxtwitter-copy-btn';
         button.setAttribute('title', '複製 fxTwitter 連結');
 
         const buttonContent = document.createElement('div');
@@ -274,6 +276,11 @@
             buttonContent.style.color = BUTTON_COLOR;
             iconBackground.style.backgroundColor = '';
         });
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            copyCurrentUrl();
+        });
 
         return outerContainer;
     }
@@ -281,41 +288,74 @@
     // 添加按鈕到推文操作區域
     const processedGroups = new WeakSet();
 
-    function addButtonToTweets() {
+    function processActionGroup(group) {
+        if (processedGroups.has(group)) return;
+
+        const hasReply = group.querySelector('[data-testid="reply"]');
+        const hasRetweet = group.querySelector('[data-testid="retweet"]');
+        const hasLike = group.querySelector('[data-testid="like"]');
+        const hasShare = group.querySelector('[data-testid="share"]');
+        const actionCount = [hasReply, hasRetweet, hasLike, hasShare].filter(Boolean).length;
+
+        if (actionCount >= 2) {
+            group.appendChild(createInlineButton());
+        }
+
+        processedGroups.add(group);
+    }
+
+    function collectActionGroupsFromRoot(root, groups) {
+        if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+
+        if (root.matches?.(TWEET_ACTION_GROUP_SELECTOR)) {
+            groups.add(root);
+        }
+
+        const nestedGroups = root.querySelectorAll?.(TWEET_ACTION_GROUP_SELECTOR);
+        if (!nestedGroups) return;
+
+        nestedGroups.forEach(group => groups.add(group));
+    }
+
+    function scheduleTweetScan(full = false) {
+        if (full) {
+            pendingFullTweetScan = true;
+            pendingTweetRoots.clear();
+        }
+
+        clearTimeout(fxTwitterTimeout);
+        fxTwitterTimeout = setTimeout(() => {
+            const roots = pendingFullTweetScan ? null : Array.from(pendingTweetRoots);
+            pendingTweetRoots.clear();
+            pendingFullTweetScan = false;
+            addButtonToTweets(roots);
+        }, DELAY_DEBOUNCE);
+    }
+
+    function isRelevantTweetNode(node) {
+        return node.nodeType === Node.ELEMENT_NODE &&
+            (node.matches?.(TWEET_RELEVANT_SELECTOR) ||
+                node.querySelector?.(TWEET_RELEVANT_SELECTOR));
+    }
+
+    function addButtonToTweets(roots = null) {
         if (!isStatusPage()) return;
 
-        const actionGroups = document.querySelectorAll('div[role="group"]');
+        if (!roots) {
+            document.querySelectorAll(TWEET_ACTION_GROUP_SELECTOR).forEach(processActionGroup);
+            return;
+        }
 
-        actionGroups.forEach(group => {
-            if (processedGroups.has(group)) return;
-
-            const hasReply = group.querySelector('[data-testid="reply"]');
-            const hasRetweet = group.querySelector('[data-testid="retweet"]');
-            const hasLike = group.querySelector('[data-testid="like"]');
-            const hasShare = group.querySelector('[data-testid="share"]');
-
-            const actionCount = [hasReply, hasRetweet, hasLike, hasShare].filter(Boolean).length;
-
-            if (actionCount >= 2) {
-                const buttonContainer = createInlineButton();
-                const button = buttonContainer.querySelector('#fxtwitter-copy-btn');
-                button.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    copyCurrentUrl();
-                });
-                group.appendChild(buttonContainer);
-            }
-
-            processedGroups.add(group);
-        });
+        const groups = new Set();
+        roots.forEach(root => collectActionGroupsFromRoot(root, groups));
+        groups.forEach(processActionGroup);
     }
 
     // 初始化 X/Twitter 專屬功能
     function initXTwitterFeatures() {
         // 初始添加按鈕
-        setTimeout(addButtonToTweets, DELAY_INITIAL);
-        setTimeout(addButtonToTweets, DELAY_RETRY);
+        setTimeout(() => addButtonToTweets(), DELAY_INITIAL);
+        setTimeout(() => addButtonToTweets(), DELAY_RETRY);
 
         // MutationObserver 監聽頁面變化
         const observer = new MutationObserver((mutations) => {
@@ -323,19 +363,14 @@
             for (const mutation of mutations) {
                 if (mutation.type !== 'childList') continue;
                 for (const node of mutation.addedNodes) {
-                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                    if (node.tagName === 'ARTICLE' ||
-                        node.querySelector?.('article')) {
-                        shouldUpdate = true;
-                        break;
-                    }
+                    if (!isRelevantTweetNode(node)) continue;
+                    pendingTweetRoots.add(node);
+                    shouldUpdate = true;
                 }
-                if (shouldUpdate) break;
             }
 
             if (shouldUpdate) {
-                clearTimeout(fxTwitterTimeout);
-                fxTwitterTimeout = setTimeout(addButtonToTweets, DELAY_DEBOUNCE);
+                scheduleTweetScan();
             }
         });
 
@@ -352,7 +387,7 @@
         function onUrlChange() {
             if (location.href !== lastUrl) {
                 lastUrl = location.href;
-                setTimeout(addButtonToTweets, DELAY_DEBOUNCE);
+                scheduleTweetScan(true);
             }
         }
 
@@ -371,6 +406,7 @@
         // 頁面卸載時清理 MutationObserver
         window.addEventListener('beforeunload', () => {
             observer.disconnect();
+            clearTimeout(fxTwitterTimeout);
         });
     }
 
