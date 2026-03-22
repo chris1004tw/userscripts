@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.3
+// @version      0.4.4
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -20,57 +20,22 @@
 
     // ===== 目標字體（統一定義）=====
     const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
-
-    // ===== Canvas API 攔截（必須最早執行）=====
-    // Canvas 文字是用 JS 繪製的，CSS 無法控制，需要攔截 API
-    (function interceptCanvasText() {
-        // 解析 CSS font 字串，替換字體部分
-        // font 格式: [font-style] [font-variant] [font-weight] font-size [/line-height] font-family
-        // 例如: "12px Arial", "bold 14px sans-serif", "italic 12px/1.5 'Helvetica Neue'"
-        const fontSizeRegex = /(\d+(?:\.\d+)?(?:px|pt|em|rem|%|vh|vw|ex|ch|vmin|vmax))/i;
-        const lineHeightRegex = /^(\/[\d.]+(?:px|pt|em|rem|%)?)?/;
-
-        function replaceFont(fontStr) {
-            if (!fontStr) return `12px ${TARGET_FONT}`;
-
-            // 找到 font-size 的位置（數字+單位）
-            const sizeMatch = fontStr.match(fontSizeRegex);
-            if (!sizeMatch) return fontStr; // 無法解析，返回原值
-
-            const sizeIndex = fontStr.indexOf(sizeMatch[0]);
-            const sizeEnd = sizeIndex + sizeMatch[0].length;
-
-            // size 之前的部分（style, variant, weight）
-            const prefix = fontStr.substring(0, sizeEnd);
-
-            // 檢查是否有 line-height（/後面的數字）
-            const afterSize = fontStr.substring(sizeEnd);
-            const lineHeightMatch = afterSize.match(lineHeightRegex);
-            const lineHeight = lineHeightMatch ? lineHeightMatch[0] : '';
-
-            return prefix + lineHeight + ' ' + TARGET_FONT;
-        }
-
-        const proto = CanvasRenderingContext2D.prototype;
-        const originalFillText = proto.fillText;
-        const originalStrokeText = proto.strokeText;
-
-        proto.fillText = function (text, x, y, maxWidth) {
-            this.font = replaceFont(this.font);
-            if (maxWidth !== undefined) {
-                return originalFillText.call(this, text, x, y, maxWidth);
-            }
-            return originalFillText.call(this, text, x, y);
-        };
-
-        proto.strokeText = function (text, x, y, maxWidth) {
-            this.font = replaceFont(this.font);
-            if (maxWidth !== undefined) {
-                return originalStrokeText.call(this, text, x, y, maxWidth);
-            }
-            return originalStrokeText.call(this, text, x, y);
-        };
-    })();
+    const TEXT_ELEMENT_SELECTORS = ['p', 'span', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'label', 'article', 'blockquote', 'figcaption', 'cite', 'div'];
+    const TEXT_ELEMENT_SELECTOR = TEXT_ELEMENT_SELECTORS.join(',');
+    const SCOPED_TEXT_SELECTOR = TEXT_ELEMENT_SELECTORS
+        .map(selector => `[data-inline-font-scope] ${selector}:not([data-no-font]):not([data-no-font-parent])`)
+        .join(',\n            ');
+    const FORM_FONT_SELECTORS = [
+        'select:not([data-no-font])',
+        'option:not([data-no-font])',
+        'input:not([type="checkbox"]):not([type="radio"]):not([data-no-font])',
+        'textarea:not([data-no-font])',
+        'button:not([data-no-font]):not([class*="icon"]):not([class*="Icon"])'
+    ];
+    const FORM_FONT_SELECTOR = FORM_FONT_SELECTORS.join(',\n            ');
+    const SCOPED_FORM_SELECTOR = FORM_FONT_SELECTORS
+        .map(selector => `[data-inline-font-scope] ${selector}`)
+        .join(',\n            ');
 
     // ===== 黑名單管理 =====
     const currentHost = location.hostname;
@@ -115,6 +80,75 @@
 
     if (!isEnabled) return;
 
+    // ===== Canvas API 攔截（只在啟用網站執行）=====
+    // Canvas 文字是用 JS 繪製的，CSS 無法控制，需要攔截 API
+    (function interceptCanvasText() {
+        if (typeof CanvasRenderingContext2D === 'undefined') return;
+
+        // 解析 CSS font 字串，替換字體部分
+        // font 格式: [font-style] [font-variant] [font-weight] font-size [/line-height] font-family
+        // 例如: "12px Arial", "bold 14px sans-serif", "italic 12px/1.5 'Helvetica Neue'"
+        const fontSizeRegex = /(\d+(?:\.\d+)?(?:px|pt|em|rem|%|vh|vw|ex|ch|vmin|vmax))/i;
+        const lineHeightRegex = /^(\/[\d.]+(?:px|pt|em|rem|%)?)?/;
+        const FONT_CACHE_LIMIT = 256;
+        const fontCache = new Map();
+
+        function replaceFont(fontStr) {
+            const cacheKey = fontStr || '';
+            const cached = fontCache.get(cacheKey);
+            if (cached !== undefined) return cached;
+
+            let replaced = fontStr || `12px ${TARGET_FONT}`;
+
+            if (fontStr && !fontStr.includes('AppleGothic') && !fontStr.includes('AppleGothicSC')) {
+                const sizeMatch = fontStr.match(fontSizeRegex);
+                if (sizeMatch) {
+                    const sizeIndex = fontStr.indexOf(sizeMatch[0]);
+                    const sizeEnd = sizeIndex + sizeMatch[0].length;
+                    const prefix = fontStr.substring(0, sizeEnd);
+                    const afterSize = fontStr.substring(sizeEnd);
+                    const lineHeightMatch = afterSize.match(lineHeightRegex);
+                    const lineHeight = lineHeightMatch ? lineHeightMatch[0] : '';
+                    replaced = prefix + lineHeight + ' ' + TARGET_FONT;
+                }
+            }
+
+            if (fontCache.size >= FONT_CACHE_LIMIT) {
+                fontCache.clear();
+            }
+            fontCache.set(cacheKey, replaced);
+            return replaced;
+        }
+
+        function applyCanvasFont(ctx) {
+            const currentFont = ctx.font;
+            const replacedFont = replaceFont(currentFont);
+            if (currentFont !== replacedFont) {
+                ctx.font = replacedFont;
+            }
+        }
+
+        const proto = CanvasRenderingContext2D.prototype;
+        const originalFillText = proto.fillText;
+        const originalStrokeText = proto.strokeText;
+
+        proto.fillText = function (text, x, y, maxWidth) {
+            applyCanvasFont(this);
+            if (maxWidth !== undefined) {
+                return originalFillText.call(this, text, x, y, maxWidth);
+            }
+            return originalFillText.call(this, text, x, y);
+        };
+
+        proto.strokeText = function (text, x, y, maxWidth) {
+            applyCanvasFont(this);
+            if (maxWidth !== undefined) {
+                return originalStrokeText.call(this, text, x, y, maxWidth);
+            }
+            return originalStrokeText.call(this, text, x, y);
+        };
+    })();
+
     // ===== CSS 樣式（核心：用 CSS 強制套用字體）=====
     function initStyles() {
         GM_addStyle(`
@@ -150,12 +184,18 @@
 
             /* 主規則：:where() 使特異性歸零（後宣告，同特異性時覆蓋程式碼區域的 :where() 子代選擇器） */
             /* 移除程式碼相關 :not()，靠宣告順序處理，減少 14 個 :not() 條件 */
-            :where(html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button)) {
+            :where(html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="pi-"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button)) {
                 font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
             }
 
-            /* 表單元素額外強制（排除 checkbox/radio，因為它們常用 icon 字體顯示勾選狀態）*/
-            select, option, input:not([type="checkbox"]):not([type="radio"]), textarea, button {
+            /* 對帶 inline style 的容器，用作用域規則取代逐一覆寫整個子樹 */
+            ${SCOPED_TEXT_SELECTOR} {
+                font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
+            }
+
+            /* 表單元素額外強制（排除 checkbox/radio 及 icon 按鈕）*/
+            ${FORM_FONT_SELECTOR},
+            ${SCOPED_FORM_SELECTOR} {
                 font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
             }
         `);
@@ -168,17 +208,17 @@
     const iconFontPattern = /icon|iconfont|icomoon|fontawesome|material|glyph|symbol|boxicon/i;
     const iconPrefixPattern = /^(fa|fas|far|fal|fad|fab|bi|ri|mdi|mi|oi|ti|si|gi|ai|di|fi|hi|pi|vi|wi|ci|bx|bxs|bxl)-/;
     const checkboxRadioPattern = /checkbox|radio/i;
-    const TEXT_ELEMENT_SELECTOR = 'p,span,a,h1,h2,h3,h4,h5,h6,li,td,th,label,article,blockquote,figcaption,cite,div';
     // 排除自訂字體檢測時的白名單（我們自己定義的 @font-face）
     const ourFonts = new Set(['AppleGothic', 'AppleGothicSC']);
     let processed = new WeakSet();
 
     // ===== 狀態重置（供重新掃描使用）=====
     function resetState() {
-        // 移除所有 data-no-font 和 data-no-font-parent 屬性（合併為單次查詢）
-        document.querySelectorAll('[data-no-font], [data-no-font-parent]').forEach(el => {
+        // 移除掃描過程中加入的標記，避免重新掃描時殘留舊狀態
+        document.querySelectorAll('[data-no-font], [data-no-font-parent], [data-inline-font-scope]').forEach(el => {
             el.removeAttribute('data-no-font');
             el.removeAttribute('data-no-font-parent');
+            el.removeAttribute('data-inline-font-scope');
         });
         processed = new WeakSet();
         webFontCache = null;
@@ -321,27 +361,6 @@
     const RESULT_ICON = 1;
     const RESULT_OVERRIDE = 2;
 
-    // 對有 inline font-family 的父元素，子元素也強制套用 inline font-family
-    // 避免頁面 CSS 的 !important 規則覆蓋 :where() 零特異性選擇器
-    function overrideDescendants(parent) {
-        const children = parent.querySelectorAll(TEXT_ELEMENT_SELECTOR);
-        for (let i = 0; i < children.length; i++) {
-            const child = children[i];
-            if (processed.has(child)) continue;
-            processed.add(child);
-            if (isIconElement(child)) {
-                child.setAttribute('data-no-font', '');
-                continue;
-            }
-            if (shouldSkipElement(child)) continue;
-            if (child.style.fontFamily && isCustomWebFont(child.style.fontFamily)) {
-                child.setAttribute('data-no-font', '');
-                continue;
-            }
-            child.style.setProperty('font-family', TARGET_FONT, 'important');
-        }
-    }
-
     function processElement(el) {
         if (processed.has(el)) return 0;
         processed.add(el);
@@ -359,9 +378,10 @@
         // 2. 如果是需要跳過的表單元素，跳過
         if (shouldSkipElement(el)) return 0;
 
-        // 3. 如果有任何 inline style（包含沒設 font-family 的情況）
+        // 3. 如果有 inline style，用 inline !important 保住此元素的字體
+        // 子元素則改用 CSS 作用域，避免每個 styled 容器都重掃整棵子樹
         // inline !important 能打贏所有 CSS !important 規則，確保 CMS 生成的內容也被覆蓋
-        if (el.hasAttribute('style')) {
+        if (el.style.length > 0) {
             const originalFontFamily = el.style.fontFamily;
             // 若已有 font-family 且為自訂 @font-face（如淘寶反爬蟲字體），標記排除避免亂碼
             if (originalFontFamily && isCustomWebFont(originalFontFamily)) {
@@ -369,9 +389,9 @@
                 return 0;
             }
             el.style.setProperty('font-family', TARGET_FONT, 'important');
-            // 子元素可能被頁面 CSS 的 !important 規則（如 .ipmImport *）覆蓋
-            // :where() 零特異性選擇器無法勝出，需對子元素也套用 inline 覆蓋
-            overrideDescendants(el);
+            if (el.firstElementChild) {
+                el.setAttribute('data-inline-font-scope', '');
+            }
             return RESULT_OVERRIDE;
         }
 
@@ -414,6 +434,7 @@
         '[class*="bx"]',
         '[class*="boxicon"]',
         '[class*="woo-font"]',
+        '[class*="pi-"]',
         'i[style*="font-family"]'
     ].join(', ');
 
@@ -487,17 +508,22 @@
         // 合併文字元素與 icon 候選選擇器，讓動態新增的 icon 也能被偵測
         const observerSelector = `${TEXT_ELEMENT_SELECTOR}, ${iconCandidateSelector}`;
 
+        function queueNode(node) {
+            if (node.nodeType !== 1) return;
+            if (node.matches?.(observerSelector)) queue.add(node);
+            if (!node.firstElementChild) return;
+            const children = node.querySelectorAll?.(observerSelector);
+            if (!children) return;
+            for (let i = 0; i < children.length; i++) {
+                queue.add(children[i]);
+            }
+        }
+
         new MutationObserver(mutations => {
             for (let i = 0; i < mutations.length; i++) {
                 const nodes = mutations[i].addedNodes;
                 for (let j = 0; j < nodes.length; j++) {
-                    const n = nodes[j];
-                    if (n.nodeType !== 1) continue;
-                    if (n.matches?.(observerSelector)) queue.add(n);
-                    const children = n.querySelectorAll?.(observerSelector);
-                    if (children) {
-                        for (let k = 0; k < children.length; k++) queue.add(children[k]);
-                    }
+                    queueNode(nodes[j]);
                 }
             }
             if (queue.size && !scheduled) {
