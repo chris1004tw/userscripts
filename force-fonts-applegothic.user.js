@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.4
+// @version      0.4.5
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -22,8 +22,10 @@
     const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
     const TEXT_ELEMENT_SELECTORS = ['p', 'span', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'label', 'article', 'blockquote', 'figcaption', 'cite', 'div'];
     const TEXT_ELEMENT_SELECTOR = TEXT_ELEMENT_SELECTORS.join(',');
+    // icon 相關 CSS :not() 排除條件（主規則與 scoped 規則共用，避免 icon 字體被覆蓋）
+    const ICON_NOT_SELECTORS = ':not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="pi-"])';
     const SCOPED_TEXT_SELECTOR = TEXT_ELEMENT_SELECTORS
-        .map(selector => `[data-inline-font-scope] ${selector}:not([data-no-font]):not([data-no-font-parent])`)
+        .map(selector => `[data-inline-font-scope] ${selector}:not([data-no-font]):not([data-no-font-parent])${ICON_NOT_SELECTORS}`)
         .join(',\n            ');
     const FORM_FONT_SELECTORS = [
         'select:not([data-no-font])',
@@ -184,7 +186,7 @@
 
             /* 主規則：:where() 使特異性歸零（後宣告，同特異性時覆蓋程式碼區域的 :where() 子代選擇器） */
             /* 移除程式碼相關 :not()，靠宣告順序處理，減少 14 個 :not() 條件 */
-            :where(html body *:not([data-no-font]):not([data-no-font-parent]):not([class*="icon"]):not([class*="Icon"]):not([class*="fa-"]):not([class*="material"]):not([class*="glyph"]):not([class*="symbol"]):not([class*="Symbol"]):not([data-icon]):not([class*="bx"]):not([class*="boxicon"]):not([class*="pi-"]):not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button)) {
+            :where(html body *:not([data-no-font]):not([data-no-font-parent])${ICON_NOT_SELECTORS}:not([class*="checkbox"]):not([class*="radio"]):not(input):not(select):not(textarea):not(button)) {
                 font-family: AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif !important;
             }
 
@@ -203,9 +205,9 @@
 
     // ===== 常數與狀態 =====
     // 詞邊界 \b 避免誤判（如 "lexicon" 不應匹配 "icon"）
-    const iconClassPattern = /\b(icon|iconfont|icomoon|fontawesome|material|glyph|symbol|octicon|feather|ionicon|themify|alibaba|anticon|boxicon)\b|global-iconfont|woo-font/i;
+    const iconClassPattern = /\b(icon|iconfont|icomoon|fontawesome|material|glyph|symbol|octicon|feather|ionicon|themify|alibaba|anticon|boxicon|kt-player)\b|global-iconfont|woo-font/i;
     // font-family 檢測用（不需要詞邊界）
-    const iconFontPattern = /icon|iconfont|icomoon|fontawesome|material|glyph|symbol|boxicon/i;
+    const iconFontPattern = /icon|iconfont|icomoon|fontawesome|material|glyph|symbol|boxicon|ktplayer/i;
     const iconPrefixPattern = /^(fa|fas|far|fal|fad|fab|bi|ri|mdi|mi|oi|ti|si|gi|ai|di|fi|hi|pi|vi|wi|ci|bx|bxs|bxl)-/;
     const checkboxRadioPattern = /checkbox|radio/i;
     // 排除自訂字體檢測時的白名單（我們自己定義的 @font-face）
@@ -372,6 +374,14 @@
             if (el.parentElement && el.parentElement !== document.body) {
                 el.parentElement.setAttribute('data-no-font-parent', '');
             }
+            // icon 容器（如 kt-player）：標記所有子孫元素，防止 scoped CSS 規則覆蓋 icon 字體
+            if (el.firstElementChild) {
+                const descendants = el.querySelectorAll('*');
+                for (let i = 0; i < descendants.length; i++) {
+                    descendants[i].setAttribute('data-no-font', '');
+                    processed.add(descendants[i]);
+                }
+            }
             return RESULT_ICON;
         }
 
@@ -435,6 +445,7 @@
         '[class*="boxicon"]',
         '[class*="woo-font"]',
         '[class*="pi-"]',
+        '[class*="kt-player"]',
         'i[style*="font-family"]'
     ].join(', ');
 
