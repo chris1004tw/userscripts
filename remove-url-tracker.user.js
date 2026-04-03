@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.2
+// @version      0.4.3
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -81,6 +81,7 @@
         "mc_cid", "mc_eid", "mkt_tok", "nr_email_referer", "vero_conv", "vero_id",
         // 其他追蹤
         "trk", "trkCampaign", "oly_anon_id", "oly_enc_id", "otc", "__s", "wickedid", "dicbo", "spm", "scm",
+        "from",
         "ref", "ref_src", "ref_url", "src", "referrer", "origin_source",
         "xmt", "slof", "referral_code", "referral_story_type", "tracking", "hoisted_section_header_type", "rdid", "srsltid", "idorvanity", "set"
     ]);
