@@ -21,6 +21,7 @@
 | 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製當前網址。<br/>特定網站改寫 URL：<br/>・在 X/Twitter 上複製時會轉換為 fxTwitter 連結。<br/>・在 PChome 24h 上複製時會轉換為 pancake 連結。<br/>・在蝦皮上複製時會轉換為短網址的連結。 | 0.4 | [Install](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
 | 社群媒體影片音量鎖定 | 鎖定 Facebook、Instagram、Threads、X 影片音量，防止被平台覆蓋。<br/>透過 Tampermonkey 選單調整音量與靜音，點擊原生靜音按鈕同樣有效。<br/>⚠️ 因平台 UI 更新速度過快，不支援平台內建音量滑桿，請透過 Tampermonkey 選單調整音量。 | 0.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js) |
 | Medium&nbsp;付費牆繞過 | 自動跳轉至第三方服務閱讀 Medium 全文。<br/>透過 Tampermonkey 選單切換預設服務（Freedium / Archive.today / ReadMedium）。<br/>支援自動跳轉開關切換。 | 0.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/bypass-medium-paywall.user.js) |
+| Threads&nbsp;自動點擊&nbsp;Spoiler | 自動點擊 Threads 的 Spoiler 按鈕，揭露被隱藏的文字、圖片與影片內容。<br/>支援多語系標籤偵測（Spoiler / 劇透 / 爆雷 / 스포일러 / ネタバレ）。 | 0.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/threads-auto-reveal-spoiler.user.js) |
 
 ## Gemini
 
