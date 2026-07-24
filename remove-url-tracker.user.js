@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.3
+// @version      0.4.4
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -14,83 +14,121 @@
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js
 // ==/UserScript==
 // Co-authored with Claude Opus 4.6 Thinking
+// Co-authored with ChatGPT 5.6 Sol Ultra
+// 維護索引：README.md「維護索引」
 
 (function () {
     'use strict';
 
+    /**
+     * @typedef {Object} SiteRule
+     * @property {RegExp} hostnamePattern 精確比對解析後 hostname 的規則。
+     * @property {Set<string>} params 僅限該站點移除的查詢參數。
+     * @property {RegExp[]} [regexParams] 僅限該站點套用的參數名稱規則。
+     * @property {RegExp[]} [except] 不應套用規則的完整 URL 例外。
+     */
+
+    /**
+     * @typedef {Object} RemoteRule
+     * @property {RegExp} pattern ClearURLs provider 的完整 URL 規則。
+     * @property {RegExp[]} exceptions provider 的完整 URL 例外。
+     * @property {Set<string>} stringRules 完全相符的參數名稱。
+     * @property {RegExp[]} regexRules 以正規表示式比對的參數名稱。
+     */
+
     const RULE_URL = 'https://rules1.clearurls.xyz/data.minify.json';
     const ONE_HOUR = 3600000;
-    const SKIP_HOSTS = new Set(['localhost', '127.0.0.1', '']);
+    const SKIP_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '']);
     const SKIP_PROTOCOLS = new Set(['file:', 'data:', 'javascript:']);
 
-    // 特定網域規則（只放太通用會誤殺的參數）
+    // 特定網域規則：所有 hostnamePattern 都錨定結尾，避免 lookalike hostname 誤套規則。
+    /** @type {SiteRule[]} */
     const SITE_RULES = [
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?google(?:\.[a-z]{2,}){1,}/i,
-            params: new Set(["source"]),
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*google\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*google\.com$/i,
+            params: new Set(["source", "ved", "ei", "gs_l", "gs_lcp", "sclient", "sxsrf", "rlz", "ICID"]),
             except: [/^https?:\/\/mail\.google\.com\//i]
         },
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?facebook\.com/i,
-            params: new Set(["action_history", "action_type_map", "action_ref_map", "share_url", "type"])
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*facebook\.com$/i,
+            params: new Set([
+                "action_history", "action_type_map", "action_ref_map", "share_url", "type",
+                "ref", "ref_url", "referrer", "origin_source", "rdid", "idorvanity",
+                "hoisted_section_header_type", "referral_story_type"
+            ]),
+            regexParams: [/^fb_/]
         },
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?(?:twitter\.com|x\.com)/i,
-            params: new Set(["s", "t"])
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*(?:twitter\.com|x\.com)$/i,
+            params: new Set(["s", "t", "ref_src"])
         },
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?youtube\.com/i,
-            params: new Set(["feature", "kw", "pp"]),
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*youtube\.com$/i,
+            params: new Set(["feature", "kw", "pp", "si"]),
             except: [/^https?:\/\/(?:[a-z0-9-]+\.)*?youtube\.com\/redirect/i]
         },
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?(?:taobao\.com|tmall\.com|tmall\.hk)/i,
-            params: new Set(["ns", "source"])
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*amazon\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*amazon\.com$/i,
+            params: new Set(["tag", "ascsubtag", "ref_", "psc", "linkCode", "linkId", "camp", "creative"]),
+            regexParams: [/^pf_rd_/, /^pd_rd_/]
         },
         {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?shopee\.[a-z.]+/i,
-            params: new Set(["seoName"])
-        },
-        {
-            pattern: /^https?:\/\/(?:[a-z0-9-]+\.)*?trip\.com/i,
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*(?:taobao\.com|tmall\.com|tmall\.hk)$/i,
             params: new Set([
-                "cityEnName", "cityId", "ages", "barcurr", "mincurr", "minprice",
-                "fgt", "subStamp", "isCT", "isFlexible", "isFirstEnterDetail",
-                "hoteluniquekey", "masterhotelid_tracelogid",
-                "detailFilters", "hotelType", "display",
-                "roomkey", "roomToken", "msr", "mproom",
-                "trip_sub1", "hasAidInUrl"
-            ])
+                "ns", "source", "sku_properties", "priceTId", "abbucket", "xxc", "mi_id",
+                "initiative_id", "clientPreloadId", "preLoadOrigin", "pisk", "rn", "sourceId",
+                "ssid", "suggest_query", "wq", "spm", "scm", "xmt", "slof"
+            ]),
+            regexParams: [/^ali_/, /^mm_/]
+        },
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*shopee\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*shopee\.(?:sg|ph|vn|tw|cl|pl)$/i,
+            params: new Set(["seoName", "d_id", "uls_trackid"])
+        },
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*trip\.com$/i,
+            params: new Set(["masterhotelid_tracelogid", "trip_sub1", "hasAidInUrl"])
+        },
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*linkedin\.com$/i,
+            params: new Set(["trk", "trkCampaign"])
         }
     ];
 
-    // 通用規則（所有網站都套用，不需要 pattern 匹配）
+    // 通用規則只保留跨站唯一性高的追蹤名稱；短名稱與平台名稱一律限制在 SITE_RULES。
     const GENERAL_STRING_PARAMS = new Set([
-        // 各平台 Click ID
-        "yclid", "fbclid", "gclid", "dclid", "msclkid", "twclid", "igshid", "mibextid", "hl",
-        // Google 追蹤
-        "ved", "ei", "gs_l", "gs_lcp", "sclient", "sxsrf", "rlz", "ICID",
-        // Amazon 追蹤
-        "tag", "ascsubtag", "ref_", "psc", "linkCode", "linkId", "camp", "creative",
-        // YouTube 追蹤
-        "si",
-        // 淘寶追蹤
-        "sku_properties", "priceTId", "abbucket", "xxc", "mi_id",
-        "initiative_id", "clientPreloadId", "preLoadOrigin", "sourceId", "ssid", "suggest_query", "wq",
+        // 跨站 Click ID
+        "yclid", "fbclid", "gclid", "dclid", "msclkid", "twclid", "igshid", "mibextid", "srsltid",
         // Email 行銷追蹤
         "mc_cid", "mc_eid", "mkt_tok", "nr_email_referer", "vero_conv", "vero_id",
-        // 其他追蹤
-        "trk", "trkCampaign", "oly_anon_id", "oly_enc_id", "otc", "__s", "wickedid", "dicbo", "spm", "scm",
-        "from",
-        "ref", "ref_src", "ref_url", "src", "referrer", "origin_source",
-        "xmt", "slof", "referral_code", "referral_story_type", "tracking", "hoisted_section_header_type", "rdid", "srsltid", "idorvanity", "set"
+        // 名稱具跨站唯一性的分析識別碼
+        "oly_anon_id", "oly_enc_id", "wickedid"
     ]);
     const GENERAL_REGEX_PARAMS = [
-        /^utm_/, /^ga_/, /^sc_/, /^from_/, /^edn_/, /^fb_/, /^hmb_/, /^pf_rd_/, /^pd_rd_/, /^ali_/, /^mm_/
+        /^utm_/, /^ga_/
     ];
 
+    /** @type {RemoteRule[]} */
     let remoteRules = [];
 
+    /**
+     * 判斷解析後 URL 是否符合一條本地站點規則。
+     *
+     * @param {URL} urlObj 已完成解析的網址物件。
+     * @param {SiteRule} rule 待驗證的站點規則。
+     * @returns {boolean} hostname 符合且未命中例外時為 true。
+     */
+    function matchesSiteRule(urlObj, rule) {
+        if (!rule.hostnamePattern.test(urlObj.hostname)) return false;
+        return !rule.except?.some(ex => ex.test(urlObj.href));
+    }
+
+    /**
+     * 清除網址中的本地與遠端追蹤參數。
+     *
+     * @param {string} url 要清理的絕對網址。
+     * @returns {string | null} 有變更時回傳清理後網址，無變更或解析失敗時回傳 null。
+     */
     function cleanURL(url) {
         try {
             const urlObj = new URL(url);
@@ -104,18 +142,19 @@
 
             // 預先收集匹配此 URL 的特定網域參數
             const matchedSiteParams = new Set();
+            const matchedSiteRegexes = [];
             for (const rule of SITE_RULES) {
-                if (!rule.pattern.test(url)) continue;
-                if (rule.except?.some(ex => ex.test(url))) continue;
+                if (!matchesSiteRule(urlObj, rule)) continue;
                 for (const p of rule.params) matchedSiteParams.add(p);
+                matchedSiteRegexes.push(...(rule.regexParams || []));
             }
 
             // 預先收集匹配此 URL 的遠端規則
             const matchedRemoteStrings = new Set();
             const matchedRemoteRegexes = [];
             for (const provider of remoteRules) {
-                if (!provider.pattern.test(url)) continue;
-                if (provider.exceptions?.some(ex => ex.test(url))) continue;
+                if (!provider.pattern.test(urlObj.href)) continue;
+                if (provider.exceptions?.some(ex => ex.test(urlObj.href))) continue;
                 for (const s of provider.stringRules) matchedRemoteStrings.add(s);
                 matchedRemoteRegexes.push(...provider.regexRules);
             }
@@ -126,6 +165,7 @@
                 if (
                     GENERAL_STRING_PARAMS.has(key) ||
                     matchedSiteParams.has(key) ||
+                    matchedSiteRegexes.some(r => r.test(key)) ||
                     matchedRemoteStrings.has(key) ||
                     GENERAL_REGEX_PARAMS.some(r => r.test(key)) ||
                     matchedRemoteRegexes.some(r => r.test(key))
@@ -135,13 +175,19 @@
                 }
             }
 
-            return changed ? urlObj.origin + urlObj.pathname + (params.toString() ? '?' + params : '') + urlObj.hash : null;
+            // 直接使用 URL.href，避免手動重組時遺失 username／password 等合法 URL 元件。
+            return changed ? urlObj.href : null;
         } catch {
             return null;
         }
     }
 
-    // 預編譯遠端規則
+    /**
+     * 將 ClearURLs JSON provider 預編譯為可重複使用的正規表示式與 Set。
+     *
+     * @param {Record<string, unknown>} data ClearURLs provider 集合或含 providers 的回應物件。
+     * @returns {RemoteRule[]} 可安全套用的有效遠端規則；無效 provider 會被略過。
+     */
     function compileRemoteRules(data) {
         const providers = data.providers || data;
         return Object.values(providers).filter(p => p.urlPattern).map(provider => {
@@ -158,6 +204,12 @@
         }).filter(Boolean);
     }
 
+    /**
+     * 背景下載並快取 ClearURLs 規則，成功後重新清理目前頁面。
+     *
+     * @returns {void}
+     * @sideeffect 發出 GM_xmlhttpRequest、寫入 GM 儲存空間，並可能改寫目前網址。
+     */
     function loadRemoteRules() {
         GM_xmlhttpRequest({
             method: 'GET',
@@ -199,24 +251,38 @@
     const originalReplaceState = history.replaceState;
     let cleaning = false;
 
+    /**
+     * 清理目前頁面網址，並隔離 userscript 自己 replaceState 失敗造成的例外。
+     *
+     * @returns {void}
+     * @sideeffect 需要清理時透過原生 replaceState 更新網址；finally 保證解除重入鎖。
+     */
     function cleanCurrentURL() {
         if (cleaning) return;
         const cleaned = cleanURL(location.href);
         if (cleaned) {
             cleaning = true;
-            originalReplaceState.call(history, history.state, '', cleaned);
-            cleaning = false;
+            try {
+                originalReplaceState.call(history, history.state, '', cleaned);
+            } catch { }
+            finally {
+                cleaning = false;
+            }
         }
     }
 
+    /** 攔截頁面的 pushState，保留原生例外與回傳值，成功後再執行追蹤清理。 */
     history.pushState = function (state, title, url) {
-        originalPushState.call(this, state, title, url);
+        const result = originalPushState.call(this, state, title, url);
         cleanCurrentURL();
+        return result;
     };
 
+    /** 攔截頁面的 replaceState，保留原生例外與回傳值，成功後再執行追蹤清理。 */
     history.replaceState = function (state, title, url) {
-        originalReplaceState.call(this, state, title, url);
+        const result = originalReplaceState.call(this, state, title, url);
         cleanCurrentURL();
+        return result;
     };
 
     // popstate 事件（上一頁/下一頁）
