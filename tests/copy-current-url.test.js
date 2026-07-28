@@ -497,6 +497,49 @@ test('相似但非 Threads 的 hostname 不得轉成 vxthreads.com', () => {
   }]);
 });
 
+test('Amazon.co.jp 商品網址會簡化為只保留 ASIN 的標準網址', () => {
+  const cases = [
+    {
+      input: 'https://www.amazon.co.jp/%E8%B3%87%E7%94%9F%E5%A0%82%E3%82%AF%E3%83%AC%E3%83%BB%E3%83%89%E3%83%BB%E3%83%9D%E3%83%BC%E3%83%9C%E3%83%BC%E3%83%86-%E3%83%97%E3%83%BC%E3%83%89%E3%83%AB%E3%83%88%E3%83%A9%E3%83%B3%E3%82%B9%E3%83%91%E3%83%A9%E3%83%B3%E3%83%88%EF%BD%8E-1%E3%83%A9%E3%82%A4%E3%83%88-26g-%E3%81%8A%E4%B8%80%E4%BA%BA%E6%A7%98%EF%BC%91%E5%80%8B%E9%99%90%E3%82%8A-%E5%9B%BD%E5%86%85%E6%AD%A3%E8%A6%8F%E5%93%81/dp/B09PQSG597/357-9689399-6882450',
+      expected: 'https://www.amazon.co.jp/dp/B09PQSG597',
+    },
+    {
+      input: 'https://amazon.co.jp/dp/4062881721?th=1&psc=1#details',
+      expected: 'https://www.amazon.co.jp/dp/4062881721',
+    },
+    {
+      input: 'https://www.amazon.co.jp/gp/product/B09PQSG597/ref=ox_sc_act_title_1?smid=example',
+      expected: 'https://www.amazon.co.jp/dp/B09PQSG597',
+    },
+  ];
+
+  for (const { input, expected } of cases) {
+    const environment = runCopyUrlScript(input);
+    triggerTrustedCopyShortcut(environment);
+    assert.deepEqual(environment.clipboardWrites, [{
+      value: expected,
+      type: 'text',
+    }], input);
+  }
+});
+
+test('Amazon.co.jp 非商品頁與相似 hostname 不得改寫', () => {
+  const inputs = [
+    'https://www.amazon.co.jp/s?k=face+powder',
+    'https://www.amazon.co.jp/gp/help/customer/display.html',
+    'https://www.amazon.co.jp.example.org/title/dp/B09PQSG597/tracking',
+  ];
+
+  for (const input of inputs) {
+    const environment = runCopyUrlScript(input);
+    triggerTrustedCopyShortcut(environment);
+    assert.deepEqual(environment.clipboardWrites, [{
+      value: input,
+      type: 'text',
+    }], input);
+  }
+});
+
 test('注入按鈕忽略合成 click，可信 click 仍可複製', () => {
   const environment = createBrowserEnvironment('https://x.com/user/status/123');
   const group = createActionGroup(2);

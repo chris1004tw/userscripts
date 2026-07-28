@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.4.2
-// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter 轉 fxTwitter，Threads 轉 vxthreads.com，PChome 轉 Pancake，Shopee 轉短網址）
+// @version      0.4.3
+// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Threads、Amazon.co.jp、PChome 與 Shopee 網址轉換）
 // @author       chris1004tw
 // @match        *://*/*
 // @grant        GM_setClipboard
@@ -222,6 +222,39 @@
     }
 
     /**
+     * 判斷目前頁面是否為日本 Amazon。
+     *
+     * @returns {boolean} hostname 精確為 amazon.co.jp 或 www.amazon.co.jp 時回傳 true。
+     * 此函式只讀取 location，無副作用。
+     */
+    function isAmazonJapan() {
+        const host = window.location.hostname;
+        return host === 'amazon.co.jp' || host === 'www.amazon.co.jp';
+    }
+
+    /**
+     * 將日本 Amazon 商品網址轉換為只保留 ASIN 的標準短網址。
+     *
+     * 設計意圖：商品標題、推薦來源、工作階段路徑與查詢參數不影響商品識別，
+     * 因此僅保留 dp 路徑與固定為十碼的 ASIN，產生穩定且可分享的網址。
+     *
+     * @param {string} url 原始 Amazon.co.jp 網址。
+     * @returns {string} 可辨識商品頁時回傳 https://www.amazon.co.jp/dp/ASIN，否則回傳原網址。
+     * @throws {TypeError} 傳入無法由 URL API 解析的字串時拋出。
+     * 此函式無副作用。
+     */
+    function convertToAmazonShort(url) {
+        const parsed = new URL(url);
+        const match = parsed.pathname.match(
+            /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i
+        );
+
+        return match
+            ? `https://www.amazon.co.jp/dp/${match[1].toUpperCase()}`
+            : url;
+    }
+
+    /**
      * 判斷目前頁面是否為台灣 Shopee。
      *
      * @returns {boolean} hostname 為 shopee.tw 時回傳 true。
@@ -301,6 +334,12 @@
         } else if (isThreads()) {
             url = convertToVxThreads(url);
             notificationTitle = '已複製 vxThreads 網址！';
+        } else if (isAmazonJapan()) {
+            const shortUrl = convertToAmazonShort(url);
+            if (shortUrl !== url) {
+                url = shortUrl;
+                notificationTitle = '已複製 Amazon 短網址！';
+            }
         } else if (isShopee()) {
             const shortUrl = convertToShopeeShort(url);
             if (shortUrl !== url) {
