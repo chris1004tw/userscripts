@@ -17,6 +17,7 @@
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js
 // ==/UserScript==
 // Co-authored with Claude Opus 4.6 Thinking
+// Co-authored with ChatGPT 5.6 Sol Ultra
 // 維護索引：README.md「維護索引」
 // 原始版本由 ttoan12 開發 (https://github.com/ttoan12/social-network-video-volume-fix)
 
