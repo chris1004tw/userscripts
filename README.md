@@ -18,7 +18,7 @@
 | 名稱 | 說明 | 版本 | 安裝 |
 | :--- | :--- | :---: | :--- |
 | 移除 URL 追蹤 | 自動移除 URL 中的追蹤參數，保護您的隱私。<br/>所有網站皆會清除高辨識度追蹤名稱與前綴；Amazon `ufe` 等站點參數只在精確 hostname 規則中處理，並保留其他網站的同名參數及語言、篩選、商品款式與訂房狀態等功能性資料。 | 0.4.5 | [Install](https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js) |
-| 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製當前網址。<br/>特定網站改寫 URL：<br/>・在 X/Twitter 上轉換為 fxTwitter 連結，並於單篇貼文操作列加入複製按鈕。<br/>・在 Threads 上轉換為 vxThreads（vxthreads.com）連結。<br/>・在 PChome 24h 上轉換為 Pancake 連結。<br/>・在蝦皮上轉換為短網址。 | 0.4.2 | [Install](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
+| 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製當前網址。<br/>特定網站改寫 URL：<br/>・在 X/Twitter 上轉換為 fxTwitter 連結，並於單篇貼文操作列加入複製按鈕。<br/>・在 Threads 上轉換為 vxThreads（vxthreads.com）連結。<br/>・在 Amazon.co.jp 上將商品網址簡化為 `/dp/ASIN` 格式。<br/>・在 PChome 24h 上轉換為 Pancake 連結。<br/>・在蝦皮上轉換為短網址。 | 0.4.3 | [Install](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
 | 社群媒體影片音量鎖定 | 鎖定 Facebook、Instagram、Threads、X 既有與動態新增影片的音量，防止被平台覆蓋。<br/>透過 Tampermonkey 選單調整並保存音量與靜音；為避免平台程式誤寫設定，原生控制不會變更鎖定值。<br/>⚠️ 因平台 UI 更新速度過快，不支援平台內建音量滑桿，請透過 Tampermonkey 選單調整音量。 | 0.1.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js) |
 | Medium&nbsp;付費牆繞過 | 自動跳轉至第三方服務閱讀 Medium 全文。<br/>透過 Tampermonkey 選單切換預設服務（Freedium / Archive.today / ReadMedium）。<br/>支援自動跳轉開關切換。 | 0.1.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/bypass-medium-paywall.user.js) |
 | Threads&nbsp;自動點擊&nbsp;Spoiler | 自動點擊 Threads 的 Spoiler 按鈕，揭露被隱藏的文字、圖片與影片內容。<br/>支援多語系標籤偵測（Spoiler / 劇透 / 爆雷 / 스포일러 / ネタバレ）。 | 0.1.1 | [Install](https://github.com/chris1004tw/userscripts/raw/main/threads-auto-reveal-spoiler.user.js) |
@@ -50,7 +50,7 @@ Get-ChildItem -Recurse -File -Path 'tests' -Filter '*.js' | ForEach-Object { nod
 | 腳本／文件 | 主要入口與職責 | 行為測試 |
 | :--- | :--- | :--- |
 | `remove-url-tracker.user.js` | `cleanURL()` 套用跨站與精確站點清理規則；`cleanCurrentURL()` History 整合 | `tests/remove-url-tracker.test.js` |
-| `copy-current-url.user.js` | `copyCurrentUrl()` 複製與派送；`convertToVxThreads()` 轉換 Threads 網址；`processActionGroup()` 插入 X 按鈕 | `tests/copy-current-url.test.js` |
+| `copy-current-url.user.js` | `copyCurrentUrl()` 複製與派送；`convertToVxThreads()` 轉換 Threads 網址；`convertToAmazonShort()` 簡化 Amazon 商品網址；`processActionGroup()` 插入 X 按鈕 | `tests/copy-current-url.test.js` |
 | `social-media-volume-fix.user.js` | `syncToPage()` 同步影片；`processVideoScanQueue()` 逐幀處理動態影片 | `tests/social-media-volume-fix.test.js` |
 | `bypass-medium-paywall.user.js` | `isServiceUrl()` 服務站辨識；`redirect()` 跳轉 | `tests/bypass-medium-paywall.test.js` |
 | `threads-auto-reveal-spoiler.user.js` | `revealSpoilersIn()` 揭露內容；`queueScan()` 分幀掃描 | `tests/threads-auto-reveal-spoiler.test.js` |
