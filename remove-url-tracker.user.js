@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.4
+// @version      0.4.5
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
@@ -23,8 +23,8 @@
     /**
      * @typedef {Object} SiteRule
      * @property {RegExp} hostnamePattern 精確比對解析後 hostname 的規則。
-     * @property {Set<string>} params 僅限該站點移除的查詢參數。
-     * @property {RegExp[]} [regexParams] 僅限該站點套用的參數名稱規則。
+     * @property {Set<string>} params 容易誤殺、僅限該站點移除的查詢參數。
+     * @property {RegExp[]} [regexParams] 容易誤殺、僅限該站點套用的參數名稱規則。
      * @property {RegExp[]} [except] 不應套用規則的完整 URL 例外。
      */
 
@@ -41,26 +41,21 @@
     const SKIP_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '']);
     const SKIP_PROTOCOLS = new Set(['file:', 'data:', 'javascript:']);
 
-    // 特定網域規則：所有 hostnamePattern 都錨定結尾，避免 lookalike hostname 誤套規則。
+    // 特定網域只保留可能承載功能狀態的歧義參數；hostnamePattern 必須錨定結尾以排除 lookalike。
     /** @type {SiteRule[]} */
     const SITE_RULES = [
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*google\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*google\.com$/i,
-            params: new Set(["source", "ved", "ei", "gs_l", "gs_lcp", "sclient", "sxsrf", "rlz", "ICID"]),
+            params: new Set(["source", "ei", "sxsrf"]),
             except: [/^https?:\/\/mail\.google\.com\//i]
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*facebook\.com$/i,
-            params: new Set([
-                "action_history", "action_type_map", "action_ref_map", "share_url", "type",
-                "ref", "ref_url", "referrer", "origin_source", "rdid", "idorvanity",
-                "hoisted_section_header_type", "referral_story_type"
-            ]),
-            regexParams: [/^fb_/]
+            params: new Set(["share_url", "type", "ref", "ref_url", "hoisted_section_header_type"])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*(?:twitter\.com|x\.com)$/i,
-            params: new Set(["s", "t", "ref_src"])
+            params: new Set(["s", "t"])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*youtube\.com$/i,
@@ -69,43 +64,48 @@
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*amazon\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*amazon\.com$/i,
-            params: new Set(["tag", "ascsubtag", "ref_", "psc", "linkCode", "linkId", "camp", "creative"]),
-            regexParams: [/^pf_rd_/, /^pd_rd_/]
+            params: new Set(["tag", "psc", "ufe", "linkCode", "linkId", "camp", "creative"])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*(?:taobao\.com|tmall\.com|tmall\.hk)$/i,
+            // sku_properties 代表使用者選定的商品款式，刻意不列入任何移除規則。
             params: new Set([
-                "ns", "source", "sku_properties", "priceTId", "abbucket", "xxc", "mi_id",
-                "initiative_id", "clientPreloadId", "preLoadOrigin", "pisk", "rn", "sourceId",
-                "ssid", "suggest_query", "wq", "spm", "scm", "xmt", "slof"
+                "ns", "source", "xxc", "mi_id", "initiative_id", "clientPreloadId",
+                "preLoadOrigin", "rn", "sourceId", "ssid", "suggest_query", "wq"
             ]),
-            regexParams: [/^ali_/, /^mm_/]
+            // mm_ 是常見自訂欄位前綴，只有阿里系站點才能安全移除。
+            regexParams: [/^mm_/]
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*shopee\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*shopee\.(?:sg|ph|vn|tw|cl|pl)$/i,
-            params: new Set(["seoName", "d_id", "uls_trackid"])
-        },
-        {
-            hostnamePattern: /^(?:[a-z0-9-]+\.)*trip\.com$/i,
-            params: new Set(["masterhotelid_tracelogid", "trip_sub1", "hasAidInUrl"])
+            params: new Set(["seoName", "d_id"])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*linkedin\.com$/i,
-            params: new Set(["trk", "trkCampaign"])
+            params: new Set(["trk"])
         }
     ];
 
-    // 通用規則只保留跨站唯一性高的追蹤名稱；短名稱與平台名稱一律限制在 SITE_RULES。
+    // 高辨識度追蹤名稱直接跨站清除，避免同一參數出現在導轉站或合作網域時還要逐站加規則。
     const GENERAL_STRING_PARAMS = new Set([
         // 跨站 Click ID
         "yclid", "fbclid", "gclid", "dclid", "msclkid", "twclid", "igshid", "mibextid", "srsltid",
+        // 平台產生、名稱具高辨識度的追蹤欄位
+        "ved", "gs_l", "gs_lcp", "sclient", "rlz", "ICID",
+        "action_history", "action_type_map", "action_ref_map", "referrer", "origin_source",
+        "rdid", "idorvanity", "referral_story_type", "ref_src",
+        "ascsubtag", "ref_",
+        "priceTId", "abbucket", "pisk", "spm", "scm", "xmt", "slof",
+        "uls_trackid",
+        "masterhotelid_tracelogid", "trip_sub1", "hasAidInUrl",
+        "trkCampaign",
         // Email 行銷追蹤
         "mc_cid", "mc_eid", "mkt_tok", "nr_email_referer", "vero_conv", "vero_id",
         // 名稱具跨站唯一性的分析識別碼
         "oly_anon_id", "oly_enc_id", "wickedid"
     ]);
     const GENERAL_REGEX_PARAMS = [
-        /^utm_/, /^ga_/
+        /^utm_/, /^ga_/, /^fb_/, /^pf_rd_/, /^pd_rd_/, /^ali_/
     ];
 
     /** @type {RemoteRule[]} */

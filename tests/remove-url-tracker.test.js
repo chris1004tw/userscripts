@@ -89,36 +89,47 @@ function createUrlEnvironment(initialHref, options = {}) {
 
 test('Given 一般網站的功能性短參數，When 清理 URL，Then 只移除跨站 click ID', () => {
   const env = createUrlEnvironment(
-    'https://example.com/search?gclid=click&hl=zh-TW&tag=books&from=home&src=nav&set=compact',
+    'https://example.com/search?gclid=click&hl=zh-TW&tag=books&ufe=layout&from=home&src=nav&set=compact',
   );
 
   assert.equal(
     env.href(),
-    'https://example.com/search?hl=zh-TW&tag=books&from=home&src=nav&set=compact',
+    'https://example.com/search?hl=zh-TW&tag=books&ufe=layout&from=home&src=nav&set=compact',
   );
 });
 
 test('Given Amazon 與淘寶追蹤參數，When 在對應站點清理，Then 站點參數被移除', () => {
   const amazon = createUrlEnvironment(
-    'https://www.amazon.com/dp/item?tag=affiliate&psc=1&item=kept',
+    'https://www.amazon.co.jp/dp/B0H17FSSHV?ufe=app_do%3Aamzn1.fos.35785624-70c4-44ae-a5c3-3f044f475d63&tag=affiliate&psc=1&item=kept',
   );
   const taobao = createUrlEnvironment(
-    'https://item.taobao.com/item.htm?id=42&pisk=token&rn=nonce&sourceId=campaign',
+    'https://item.taobao.com/item.htm?id=42&sku_properties=1627207%3A28341&pisk=token&rn=nonce&sourceId=campaign',
   );
 
-  assert.equal(amazon.href(), 'https://www.amazon.com/dp/item?item=kept');
-  assert.equal(taobao.href(), 'https://item.taobao.com/item.htm?id=42');
+  assert.equal(amazon.href(), 'https://www.amazon.co.jp/dp/B0H17FSSHV?item=kept');
+  assert.equal(
+    taobao.href(),
+    'https://item.taobao.com/item.htm?id=42&sku_properties=1627207%3A28341',
+  );
 });
 
-test('Given 其他網域使用平台同名參數，When 清理 URL，Then 不誤刪功能性資料', () => {
+test('Given 未列名網域含高辨識度追蹤參數，When 清理 URL，Then 跨站移除並保留功能性資料', () => {
   const env = createUrlEnvironment(
-    'https://shop.example.com/item?tag=category&pisk=state&rn=page&sourceId=source',
+    'https://shop.example.com/item?ved=google&action_ref_map=facebook&ref_src=x&ascsubtag=amazon&pisk=taobao&uls_trackid=shopee&trip_sub1=trip&trkCampaign=linkedin&source=search&type=book&ref=detail&s=sort&t=tab&feature=grid&si=session&tag=category&linkId=record&rn=page&sourceId=source&seoName=slug&d_id=device&trk=route&mm_unit=layout',
   );
 
   assert.equal(
     env.href(),
-    'https://shop.example.com/item?tag=category&pisk=state&rn=page&sourceId=source',
+    'https://shop.example.com/item?source=search&type=book&ref=detail&s=sort&t=tab&feature=grid&si=session&tag=category&linkId=record&rn=page&sourceId=source&seoName=slug&d_id=device&trk=route&mm_unit=layout',
   );
+});
+
+test('Given 未列名網域含平台專用追蹤前綴，When 清理 URL，Then 跨站移除高辨識度前綴', () => {
+  const env = createUrlEnvironment(
+    'https://example.com/page?fb_action_ids=facebook&pf_rd_p=amazon&pd_rd_r=amazon&ali_trackid=taobao&keep=yes',
+  );
+
+  assert.equal(env.href(), 'https://example.com/page?keep=yes');
 });
 
 test('Given Trip 訂房狀態與追蹤欄位，When 清理 URL，Then 保留功能狀態並移除明確追蹤值', () => {
@@ -132,12 +143,12 @@ test('Given Trip 訂房狀態與追蹤欄位，When 清理 URL，Then 保留功�
   );
 });
 
-test('Given 長得像 Trip 的非 Trip hostname，When 清理 URL，Then 不套用 Trip 站點規則', () => {
+test('Given 長得像 Trip 的非 Trip hostname，When 清理 URL，Then 仍套用跨站追蹤規則', () => {
   const env = createUrlEnvironment(
     'https://trip.com.evil.example/hotel?trip_sub1=keep&gclid=remove',
   );
 
-  assert.equal(env.href(), 'https://trip.com.evil.example/hotel?trip_sub1=keep');
+  assert.equal(env.href(), 'https://trip.com.evil.example/hotel');
 });
 
 test('Given ClearURLs 遠端 provider，When URL pattern 符合，Then 仍以完整 URL 套用遠端規則', () => {
