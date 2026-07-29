@@ -10,9 +10,11 @@ const SCRIPT_FILE = 'social-media-volume-fix.user.js';
  * 建立社群影片腳本所需的最小瀏覽器環境，並保留可觀察的 DOM、計時器與 GM 寫入紀錄。
  *
  * @param {{ volume?: number, muted?: boolean }} [initialSettings={}] 初始音量百分比與靜音狀態。
+ * @param {{ denyUnsafeDocumentEvents?: boolean, denyUnsafeObserverOptions?: boolean }} [environmentOptions={}]
+ * Firefox 權限邊界模擬選項。
  * @returns {object} 測試操作介面；建立時會立即執行正式 userscript，副作用侷限於 VM stub。
  */
-function createEnvironment(initialSettings = {}) {
+function createEnvironment(initialSettings = {}, environmentOptions = {}) {
   let savedSettings = {
     volume: initialSettings.volume ?? 30,
     muted: initialSettings.muted ?? false,
@@ -38,6 +40,7 @@ function createEnvironment(initialSettings = {}) {
     constructor() {
       this.nativeVolume = 1;
       this.nativeMuted = false;
+      this.paused = true;
       this.nodeType = 1;
       this.isConnected = true;
       this.parentElement = null;
@@ -231,6 +234,7 @@ function createEnvironment(initialSettings = {}) {
    * @returns {void} 無回傳值；副作用是觸發正式事件邏輯。
    */
   function dispatch(listenerMap, type, event) {
+    if (event.type === undefined) event.type = type;
     (listenerMap.get(type) ?? []).forEach((callback) => callback(event));
   }
 
@@ -243,7 +247,21 @@ function createEnvironment(initialSettings = {}) {
     addEventListener(type, callback) {
       addListener(documentListeners, type, callback);
     },
+    removeEventListener(type, callback) {
+      removeListener(documentListeners, type, callback);
+    },
   };
+
+  // 模擬 Firefox 中 unsafeWindow.document 與 userscript document 具有不同權限邊界。
+  const unsafeDocumentStub = Object.create(documentStub);
+  if (environmentOptions.denyUnsafeDocumentEvents) {
+    unsafeDocumentStub.addEventListener = function () {
+      throw new Error('Permission denied to access unsafeWindow.document');
+    };
+    unsafeDocumentStub.removeEventListener = function () {
+      throw new Error('Permission denied to access unsafeWindow.document');
+    };
+  }
 
   const pageWindow = {
     document: documentStub,
@@ -268,6 +286,22 @@ function createEnvironment(initialSettings = {}) {
   };
   pageWindow.self = pageWindow;
   pageWindow.top = pageWindow;
+
+  // unsafeWindow 使用獨立物件，讓測試能偵測頁面 realm 與 userscript realm 混用。
+  const unsafeWindowStub = Object.create(pageWindow);
+  unsafeWindowStub.document = unsafeDocumentStub;
+  if (environmentOptions.denyUnsafeObserverOptions) {
+    /** 模擬 Firefox 拒絕頁面 realm observer 讀取 userscript realm observe options。 */
+    class UnsafeMutationObserver extends FakeMutationObserver {
+      /**
+       * @returns {void} 固定拋出跨 context 權限錯誤，不建立觀察。
+       */
+      observe() {
+        throw new Error('Permission denied to access property "attributeFilter"');
+      }
+    }
+    unsafeWindowStub.MutationObserver = UnsafeMutationObserver;
+  }
 
   /**
    * 建立可由測試控制的計時器。
@@ -296,7 +330,7 @@ function createEnvironment(initialSettings = {}) {
 
   runUserScript(SCRIPT_FILE, {
     window: pageWindow,
-    unsafeWindow: pageWindow,
+    unsafeWindow: unsafeWindowStub,
     document: documentStub,
     MutationObserver: FakeMutationObserver,
     setTimeout: setTimeoutStub,
@@ -516,40 +550,67 @@ test('pagehide persisted 為 false 時中止 observer、取消 rAF 並清空待�
   assert.equal(video.muted, false);
 });
 
-test('頁面直接呼叫 muted setter 一律維持快取且不保存設定', () => {
-  const unmutedEnv = createEnvironment({ muted: false });
-  const unmutedVideo = new unmutedEnv.FakeVideoElement();
-  unmutedVideo.muted = true;
+test('不覆寫頁面的原生 video volume 與 muted prototype descriptor', () => {
+  const env = createEnvironment({ volume: 50, muted: false });
 
-  assert.equal(unmutedVideo.muted, false);
-  assert.equal(unmutedEnv.getSavedSettings().muted, false);
-  assert.equal(unmutedEnv.settingsWrites.length, 0);
-
-  const mutedEnv = createEnvironment({ muted: true });
-  const mutedVideo = new mutedEnv.FakeVideoElement();
-  mutedVideo.muted = false;
-
-  assert.equal(mutedVideo.muted, true);
-  assert.equal(mutedEnv.getSavedSettings().muted, true);
-  assert.equal(mutedEnv.settingsWrites.length, 0);
+  assert.equal(Object.hasOwn(env.FakeVideoElement.prototype, 'volume'), false);
+  assert.equal(Object.hasOwn(env.FakeVideoElement.prototype, 'muted'), false);
 });
 
-test('影片上的可信 pointerdown 或任意 keydown 也不授權 setter 保存設定', () => {
-  const eventTypes = ['pointerdown', 'keydown'];
+test('Firefox 拒絕 unsafeWindow.document 事件存取時仍會註冊 Tampermonkey 選單', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    { denyUnsafeDocumentEvents: true }
+  );
 
-  eventTypes.forEach((eventType) => {
-    const env = createEnvironment({ muted: false });
-    const video = new env.FakeVideoElement();
+  assert.equal(env.menuRegistrations.length, 2);
+  assert.equal(env.menuRegistrations[0].label.includes('音量：50%'), true);
+  assert.equal(env.menuRegistrations[1].label.includes('未靜音'), true);
+});
 
-    env.dispatchDocument(eventType, { isTrusted: true, target: video });
-    video.muted = true;
-    env.flushTimers();
+test('Firefox 拒絕 unsafeWindow observer 讀取 options 時仍會註冊選單', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    { denyUnsafeObserverOptions: true }
+  );
 
-    assert.equal(video.muted, false);
-    assert.equal(env.getSavedSettings().muted, false);
-    assert.equal(env.settingsWrites.length, 0);
-    assert.equal(env.timers.size, 0);
-  });
+  assert.equal(env.menuRegistrations.length, 2);
+  assert.equal(env.observers.length, 1);
+  assert.equal(env.observers[0].observeCalls.length, 1);
+});
+
+test('平台可在播放前暫時靜音，playing 後才恢復使用者的未靜音設定', () => {
+  const env = createEnvironment({ volume: 50, muted: false });
+  const video = new env.FakeVideoElement();
+
+  video.muted = true;
+  assert.equal(video.muted, true, '平台的原生 muted setter 不可被 userscript 攔截');
+
+  env.observers[0].emit([{ addedNodes: [video] }]);
+  env.runAnimationFrame();
+  assert.equal(video.volume, 0.25);
+  assert.equal(video.muted, true, '影片尚未播放時須保留 autoplay 所需的暫時靜音');
+
+  video.paused = false;
+  env.dispatchDocument('playing', { target: video });
+
+  assert.equal(video.muted, false);
+  assert.equal(env.getSavedSettings().muted, false);
+  assert.equal(env.settingsWrites.length, 0);
+});
+
+test('播放中被平台改寫音量與靜音時，volumechange 會恢復鎖定值', () => {
+  const env = createEnvironment({ volume: 50, muted: false });
+  const video = new env.FakeVideoElement();
+  video.paused = false;
+
+  video.volume = 1;
+  video.muted = true;
+  env.dispatchDocument('volumechange', { target: video });
+
+  assert.equal(video.volume, 0.25);
+  assert.equal(video.muted, false);
+  assert.equal(env.settingsWrites.length, 0);
 });
 
 test('只有 Tampermonkey 靜音選單會保存並同步 muted 設定', () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         社群媒體影片音量鎖定
 // @namespace    https://chris.taipei
-// @version      0.1.1
+// @version      0.1.2
 // @description  鎖定 Facebook、Instagram、Threads、X 影片音量，防止被平台覆蓋
 // @author       chris1004tw
 // @match        https://*.facebook.com/*
@@ -11,7 +11,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
-// @grant        unsafeWindow
 // @run-at       document-start
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js
 // @downloadURL  https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js
@@ -52,7 +51,7 @@
     if (patch.volume !== undefined) next.volume = Math.max(0, Math.min(100, patch.volume));
     if (patch.muted !== undefined) next.muted = patch.muted;
     GM_setValue('vvf_settings', next);
-    syncToPage();
+    syncToPage(true);
     registerMenu();
   }
 
@@ -65,50 +64,18 @@
   function ease(pct) { return (pct / 100) * (pct / 100); }
 
   // ═══════════════════════════════════════════
-  //  Prototype 覆寫（透過 unsafeWindow 存取頁面）
+  //  原生媒體設定同步
   // ═══════════════════════════════════════════
 
-  var w = unsafeWindow;
-  var volDesc = Object.getOwnPropertyDescriptor(w.HTMLMediaElement.prototype, 'volume');
-  var mutDesc = Object.getOwnPropertyDescriptor(w.HTMLMediaElement.prototype, 'muted');
+  var browserWindow = window;
+  var volDesc = Object.getOwnPropertyDescriptor(browserWindow.HTMLMediaElement.prototype, 'volume');
+  var mutDesc = Object.getOwnPropertyDescriptor(browserWindow.HTMLMediaElement.prototype, 'muted');
   if (!volDesc || !mutDesc) return;
 
-  // 快取目前的 eased 音量和靜音狀態，供 setter 同步讀取
-  // （避免在 setter 中跨 context 呼叫 GM_getValue）
+  // 快取目前的 eased 音量和靜音狀態，避免媒體事件中跨 context 呼叫 GM_getValue。
   var initSettings = getSettings();
   var cachedVolume = ease(initSettings.volume);
   var cachedMuted = initSettings.muted;
-
-  /**
-   * 以原生 descriptor 將目前快取設定套用到指定影片，繞過受保護的 prototype setter。
-   *
-   * @param {HTMLVideoElement} video 要更新的影片元素。
-   * @returns {void} 無回傳值；副作用是修改該影片的音量與靜音狀態。
-   */
-  function applySettingsToVideo(video) {
-    volDesc.set.call(video, cachedVolume);
-    mutDesc.set.call(video, cachedMuted);
-  }
-
-  /**
-   * 重新讀取設定、更新記憶體快取，並套用到頁面上所有既有影片。
-   *
-   * @returns {void} 無回傳值；副作用是讀取設定並修改所有影片的音量與靜音狀態。
-   */
-  function syncToPage() {
-    var s = getSettings();
-    cachedVolume = ease(s.volume);
-    cachedMuted = s.muted;
-    w.document.querySelectorAll('video').forEach(applySettingsToVideo);
-  }
-
-  // exportFunction 相容性：Firefox/Greasemonkey 需要，Chrome Tampermonkey 可直接使用
-  var wrapFn = typeof exportFunction === 'function'
-    ? function (fn) { return exportFunction(fn, w); }
-    : function (fn) { return fn; };
-
-  var volumeSetter = volDesc.set;
-  var mutedSetter = mutDesc.set;
 
   /**
    * 判斷指定節點是否為頁面環境中的影片元素。
@@ -117,23 +84,61 @@
    * @returns {boolean} 節點為 HTMLVideoElement 時回傳 true；不產生副作用。
    */
   function isVideoElement(node) {
-    return node instanceof w.HTMLVideoElement;
+    return node instanceof browserWindow.HTMLVideoElement;
   }
 
-  Object.defineProperty(w.HTMLVideoElement.prototype, 'volume', {
-    get: wrapFn(function () { return volDesc.get.call(this); }),
-    set: wrapFn(function (_) { volumeSetter.call(this, cachedVolume); }),
-    configurable: true,
-    enumerable: true,
-  });
+  /**
+   * 以原生 descriptor 將目前快取設定套用到指定影片。
+   *
+   * 設計意圖：不覆寫頁面 prototype，避免 Firefox／Tampermonkey 跨 context setter
+   * 中斷平台播放流程。使用者選擇未靜音時，暫停中的影片可保留平台為 autoplay
+   * 設定的暫時靜音，直到 playing 事件再恢復。
+   *
+   * @param {HTMLVideoElement} video 要更新的影片元素。
+   * @param {boolean} [forceMuted=false] 是否不考慮播放狀態、立即套用靜音設定。
+   * @returns {void} 無回傳值；副作用是按需修改該影片的音量與靜音狀態。
+   */
+  function applySettingsToVideo(video, forceMuted) {
+    if (volDesc.get.call(video) !== cachedVolume) {
+      volDesc.set.call(video, cachedVolume);
+    }
 
-  Object.defineProperty(w.HTMLVideoElement.prototype, 'muted', {
-    get: wrapFn(function () { return mutDesc.get.call(this); }),
-    // 無法跨平台可靠區分原生控制與頁面程式 setter，因此設定只允許由 GM 選單變更。
-    set: wrapFn(function (_) { mutedSetter.call(this, cachedMuted); }),
-    configurable: true,
-    enumerable: true,
-  });
+    var shouldApplyMuted = forceMuted === true || cachedMuted || video.paused === false;
+    if (shouldApplyMuted && mutDesc.get.call(video) !== cachedMuted) {
+      mutDesc.set.call(video, cachedMuted);
+    }
+  }
+
+  /**
+   * 重新讀取設定、更新記憶體快取，並套用到頁面上所有既有影片。
+   *
+   * @param {boolean} [forceMuted=false] 是否立即套用靜音設定；GM 選單操作時傳入 true。
+   * @returns {void} 無回傳值；副作用是讀取設定並修改所有影片的音量與靜音狀態。
+   */
+  function syncToPage(forceMuted) {
+    var s = getSettings();
+    cachedVolume = ease(s.volume);
+    cachedMuted = s.muted;
+    document.querySelectorAll('video').forEach(function (video) {
+      applySettingsToVideo(video, forceMuted === true);
+    });
+  }
+
+  /**
+   * 在平台媒體狀態變更後恢復鎖定設定，但不阻擋播放前的 autoplay 靜音。
+   *
+   * @param {Event} event playing 或 volumechange 媒體事件。
+   * @returns {void} 無回傳值；副作用是依影片播放狀態恢復音量與靜音。
+   */
+  function handleMediaStateChange(event) {
+    if (!isVideoElement(event.target)) return;
+    applySettingsToVideo(event.target, event.type === 'playing');
+  }
+
+  // 媒體事件不保證冒泡，因此用 userscript document 的 capture 統一監聽動態影片。
+  // 所有 DOM API 保持在同一個 userscript realm，避免 Firefox 跨 context 權限例外。
+  document.addEventListener('playing', handleMediaStateChange, true);
+  document.addEventListener('volumechange', handleMediaStateChange, true);
 
   // ═══════════════════════════════════════════
   //  Tampermonkey 選單
@@ -242,7 +247,7 @@
    */
   function scheduleVideoScan() {
     if (videoScanStopped || videoScanFrameId !== undefined || !pendingVideoScanHead) return;
-    videoScanFrameId = w.requestAnimationFrame(processVideoScanQueue);
+    videoScanFrameId = browserWindow.requestAnimationFrame(processVideoScanQueue);
   }
 
   /**
@@ -299,7 +304,7 @@
   }
 
   // 只監聽新增節點；屬性與文字變動不會觸發不必要的影片掃描。
-  var videoObserver = new w.MutationObserver(function (records) {
+  var videoObserver = new browserWindow.MutationObserver(function (records) {
     records.forEach(function (record) {
       // 移除等待中的 sibling 可能讓瀏覽器斷開其 nextElementSibling；重掃父層可確保後方節點不漏。
       if (pendingVideoScanHead && record.removedNodes && record.removedNodes.length > 0) {
@@ -308,7 +313,7 @@
       record.addedNodes.forEach(queueAddedVideoNode);
     });
   });
-  videoObserver.observe(w.document, { childList: true, subtree: true });
+  videoObserver.observe(document, { childList: true, subtree: true });
 
   /**
    * 在非 bfcache 的終局 pagehide 釋放影片 observer 與逐幀工作。
@@ -322,18 +327,20 @@
     videoScanStopped = true;
     videoObserver.disconnect();
     if (videoScanFrameId !== undefined) {
-      w.cancelAnimationFrame(videoScanFrameId);
+      browserWindow.cancelAnimationFrame(videoScanFrameId);
       videoScanFrameId = undefined;
     }
     pendingVideoScanHead = null;
     pendingVideoScanTail = null;
     queuedVideoScanItems.clear();
-    w.removeEventListener('pagehide', cleanupVideoScanning);
+    document.removeEventListener('playing', handleMediaStateChange, true);
+    document.removeEventListener('volumechange', handleMediaStateChange, true);
+    browserWindow.removeEventListener('pagehide', cleanupVideoScanning);
   }
 
   // beforeunload 可能被取消；pagehide 才代表頁面確實離開。
   // bfcache 會以 persisted=true 暫存頁面，此時保留 observer 與待執行 traversal。
-  w.addEventListener('pagehide', cleanupVideoScanning);
+  browserWindow.addEventListener('pagehide', cleanupVideoScanning);
 
   registerMenu();
 
