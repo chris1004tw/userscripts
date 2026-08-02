@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         社群媒體影片音量鎖定
 // @namespace    https://chris.taipei
-// @version      0.1.2
-// @description  鎖定 Facebook、Instagram、Threads、X 影片音量，防止被平台覆蓋
+// @version      0.1.3
+// @description  為 Facebook、Instagram、Threads、X 影片設定播放初始音量，並保留平台內建音量滑桿
 // @author       chris1004tw
 // @match        https://*.facebook.com/*
 // @match        https://*.instagram.com/*
@@ -19,6 +19,9 @@
 // Co-authored with ChatGPT 5.6 Sol Ultra
 // 維護索引：README.md「維護索引」
 // 原始版本由 ttoan12 開發 (https://github.com/ttoan12/social-network-video-volume-fix)
+// 使用方式：Tampermonkey 選單保存的音量會在每支影片開始播放時重新套用。
+// 平台內建音量滑桿仍可臨時調整目前影片；切換到下一支影片時會恢復預設音量，
+// 避免沿用上一支影片臨時拉高的音量。
 
 (function () {
   'use strict';
@@ -76,6 +79,10 @@
   var initSettings = getSettings();
   var cachedVolume = ease(initSettings.volume);
   var cachedMuted = initSettings.muted;
+  var VOLUMECHANGE_QUIET_MS = 1000;
+  var MAX_CORRECTION_BATCHES_PER_BURST = 2;
+  /** @type {WeakMap<HTMLVideoElement, {lastEventAt: number, correctionBatches: number}>} */
+  var volumeChangeCorrectionStates = new WeakMap();
 
   /**
    * 判斷指定節點是否為頁面環境中的影片元素。
@@ -96,17 +103,58 @@
    *
    * @param {HTMLVideoElement} video 要更新的影片元素。
    * @param {boolean} [forceMuted=false] 是否不考慮播放狀態、立即套用靜音設定。
-   * @returns {void} 無回傳值；副作用是按需修改該影片的音量與靜音狀態。
+   * @returns {boolean} 本次至少修改一個媒體屬性時回傳 true；否則回傳 false。
+   * @sideeffect 按需修改該影片的音量與靜音狀態。
    */
   function applySettingsToVideo(video, forceMuted) {
+    var changed = false;
     if (volDesc.get.call(video) !== cachedVolume) {
       volDesc.set.call(video, cachedVolume);
+      changed = true;
     }
 
     var shouldApplyMuted = forceMuted === true || cachedMuted || video.paused === false;
     if (shouldApplyMuted && mutDesc.get.call(video) !== cachedMuted) {
       mutDesc.set.call(video, cachedMuted);
+      changed = true;
     }
+    return changed;
+  }
+
+  /**
+   * 判斷影片目前是否已符合可立即套用的鎖定狀態。
+   *
+   * @param {HTMLVideoElement} video 要檢查的影片元素。
+   * @param {boolean} [forceMuted=false] 是否忽略播放狀態並要求靜音值立即一致。
+   * @returns {boolean} 音量與本次應處理的靜音狀態都一致時回傳 true；不產生副作用。
+   */
+  function isMediaStateLocked(video, forceMuted) {
+    if (volDesc.get.call(video) !== cachedVolume) return false;
+
+    var shouldApplyMuted = forceMuted === true || cachedMuted || video.paused === false;
+    return !shouldApplyMuted || mutDesc.get.call(video) === cachedMuted;
+  }
+
+  /**
+   * 取得影片目前的 volumechange burst 狀態，安靜滿一秒後建立新的修正額度。
+   *
+   * 設計意圖：每次事件都更新最後時間，不能因腳本自己的 setter 事件已符合鎖定值就
+   * 提前重設額度，否則 X 在 capture handler 後回寫時仍可重新啟動無限事件鏈。
+   *
+   * @param {HTMLVideoElement} video 發生 volumechange 的影片。
+   * @returns {{lastEventAt: number, correctionBatches: number}} 該影片可直接更新的 burst 狀態。
+   * @sideeffect 讀取目前時間並更新 WeakMap；不建立 timer 或其他非同步工作。
+   */
+  function getVolumeChangeCorrectionState(video) {
+    var now = Date.now();
+    var state = volumeChangeCorrectionStates.get(video);
+    if (!state || now - state.lastEventAt >= VOLUMECHANGE_QUIET_MS) {
+      state = { lastEventAt: now, correctionBatches: 0 };
+      volumeChangeCorrectionStates.set(video, state);
+    } else {
+      state.lastEventAt = now;
+    }
+    return state;
   }
 
   /**
@@ -120,19 +168,35 @@
     cachedVolume = ease(s.volume);
     cachedMuted = s.muted;
     document.querySelectorAll('video').forEach(function (video) {
+      if (forceMuted === true) volumeChangeCorrectionStates.delete(video);
       applySettingsToVideo(video, forceMuted === true);
     });
   }
 
   /**
-   * 在平台媒體狀態變更後恢復鎖定設定，但不阻擋播放前的 autoplay 靜音。
+   * 在影片開始播放時套用預設設定；volumechange 衝突時僅有限次恢復，
+   * 之後放行平台內建滑桿的目前影片調整，並保留播放前的 autoplay 暫時靜音。
    *
    * @param {Event} event playing 或 volumechange 媒體事件。
    * @returns {void} 無回傳值；副作用是依影片播放狀態恢復音量與靜音。
    */
   function handleMediaStateChange(event) {
     if (!isVideoElement(event.target)) return;
-    applySettingsToVideo(event.target, event.type === 'playing');
+
+    if (event.type === 'playing') {
+      volumeChangeCorrectionStates.delete(event.target);
+      applySettingsToVideo(event.target, true);
+      return;
+    }
+
+    var correctionState = getVolumeChangeCorrectionState(event.target);
+    // 自己的 setter 事件通常已符合預設值；平台持續調整時則於兩批修正後 fail-open。
+    if (isMediaStateLocked(event.target, false) ||
+        correctionState.correctionBatches >= MAX_CORRECTION_BATCHES_PER_BURST) return;
+
+    if (applySettingsToVideo(event.target, false)) {
+      correctionState.correctionBatches += 1;
+    }
   }
 
   // 媒體事件不保證冒泡，因此用 userscript document 的 capture 統一監聽動態影片。
@@ -303,12 +367,30 @@
     scheduleVideoScan();
   }
 
+  /**
+   * 從移除區段後方的第一個元素接續既有 traversal，不重新掃描整個 mutation target。
+   *
+   * 設計意圖：MutationRecord.nextSibling 精確指出斷鏈後方；X 虛擬化時間軸頻繁移除
+   * 貼文時，從這裡局部續掃可避免同一大型父層反覆入列。
+   *
+   * @param {Node | null} node 移除區段後的原生 sibling，可能是文字、註解或元素。
+   * @returns {void} 無回傳值；找到仍連線的元素時會保存後續兄弟鏈並排程掃描。
+   */
+  function queueVideoScanContinuation(node) {
+    var resumeNode = node;
+    while (resumeNode && resumeNode.nodeType !== 1) resumeNode = resumeNode.nextSibling;
+    if (!resumeNode || resumeNode.isConnected === false) return;
+
+    enqueueVideoScanNode(resumeNode, resumeNode.nextElementSibling, false);
+    scheduleVideoScan();
+  }
+
   // 只監聽新增節點；屬性與文字變動不會觸發不必要的影片掃描。
   var videoObserver = new browserWindow.MutationObserver(function (records) {
     records.forEach(function (record) {
-      // 移除等待中的 sibling 可能讓瀏覽器斷開其 nextElementSibling；重掃父層可確保後方節點不漏。
+      // 移除等待中的 sibling 會截斷原 traversal；從瀏覽器提供的後方 sibling 局部續接。
       if (pendingVideoScanHead && record.removedNodes && record.removedNodes.length > 0) {
-        queueAddedVideoNode(record.target);
+        queueVideoScanContinuation(record.nextSibling);
       }
       record.addedNodes.forEach(queueAddedVideoNode);
     });

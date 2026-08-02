@@ -10,8 +10,13 @@ const SCRIPT_FILE = 'social-media-volume-fix.user.js';
  * 建立社群影片腳本所需的最小瀏覽器環境，並保留可觀察的 DOM、計時器與 GM 寫入紀錄。
  *
  * @param {{ volume?: number, muted?: boolean }} [initialSettings={}] 初始音量百分比與靜音狀態。
- * @param {{ denyUnsafeDocumentEvents?: boolean, denyUnsafeObserverOptions?: boolean }} [environmentOptions={}]
- * Firefox 權限邊界模擬選項。
+ * @param {{
+ *   denyUnsafeDocumentEvents?: boolean,
+ *   denyUnsafeObserverOptions?: boolean,
+ *   simulateMediaEvents?: boolean,
+ *   platformVolume?: number,
+ *   platformMuted?: boolean
+ * }} [environmentOptions={}] Firefox 權限邊界與媒體事件回授模擬選項。
  * @returns {object} 測試操作介面；建立時會立即執行正式 userscript，副作用侷限於 VM stub。
  */
 function createEnvironment(initialSettings = {}, environmentOptions = {}) {
@@ -23,6 +28,7 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
   let nextTimerId = 1;
   let nextFrameId = 1;
   let subtreeQueryCount = 0;
+  let currentTime = 1000;
 
   const settingsWrites = [];
   const clearedTimerIds = [];
@@ -33,6 +39,7 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
   const currentVideos = [];
   const documentListeners = new Map();
   const windowListeners = new Map();
+  const pendingMediaEvents = [];
 
   /** 模擬頁面原生媒體元素，讓測試能區分原生狀態與 userscript setter。 */
   class FakeMediaElement {
@@ -64,13 +71,22 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
   Object.defineProperties(FakeMediaElement.prototype, {
     volume: {
       get() { return this.nativeVolume; },
-      set(value) { this.nativeVolume = value; },
+      set(value) {
+        if (this.nativeVolume === value) return;
+        this.nativeVolume = value;
+        if (environmentOptions.simulateMediaEvents) pendingMediaEvents.push(this);
+      },
       configurable: true,
       enumerable: true,
     },
     muted: {
       get() { return this.nativeMuted; },
-      set(value) { this.nativeMuted = Boolean(value); },
+      set(value) {
+        const normalized = Boolean(value);
+        if (this.nativeMuted === normalized) return;
+        this.nativeMuted = normalized;
+        if (environmentOptions.simulateMediaEvents) pendingMediaEvents.push(this);
+      },
       configurable: true,
       enumerable: true,
     },
@@ -328,6 +344,14 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
     timers.delete(id);
   }
 
+  /** 提供可由測試推進的時間來源，避免 burst 熔斷測試依賴真實等待。 */
+  class FakeDate extends Date {
+    /** @returns {number} 目前測試控制的 Unix 毫秒時間。 */
+    static now() {
+      return currentTime;
+    }
+  }
+
   runUserScript(SCRIPT_FILE, {
     window: pageWindow,
     unsafeWindow: unsafeWindowStub,
@@ -337,6 +361,7 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
     clearTimeout: clearTimeoutStub,
     requestAnimationFrame: pageWindow.requestAnimationFrame,
     cancelAnimationFrame: pageWindow.cancelAnimationFrame,
+    Date: FakeDate,
     GM_getValue() {
       return { ...savedSettings };
     },
@@ -374,6 +399,50 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
     },
     dispatchWindow(type, event = {}) {
       dispatch(windowListeners, type, event);
+    },
+    /**
+     * 依序派送原生 setter 產生的 volumechange，並在 capture listener 後模擬平台恢復自身狀態。
+     *
+     * @param {number} [limit=50] 判定事件活鎖的安全上限。
+     * @returns {number} 實際派送的媒體事件數；副作用是執行 userscript 與平台回寫邏輯。
+     */
+    flushMediaEvents(limit = 50) {
+      let dispatched = 0;
+      while (pendingMediaEvents.length > 0) {
+        assert.ok(dispatched < limit, 'volumechange 事件佇列不應形成活鎖');
+        const video = pendingMediaEvents.shift();
+        dispatch(documentListeners, 'volumechange', { type: 'volumechange', target: video });
+
+        // 真實頁面 listener 會在 userscript 的 capture handler 後執行，並可能恢復平台狀態。
+        if (environmentOptions.platformVolume !== undefined) {
+          video.volume = environmentOptions.platformVolume;
+        }
+        if (environmentOptions.platformMuted !== undefined) {
+          video.muted = environmentOptions.platformMuted;
+        }
+        dispatched += 1;
+      }
+      return dispatched;
+    },
+    pendingMediaEventCount: () => pendingMediaEvents.length,
+    /**
+     * 更新後續媒體事件要模擬的平台回寫狀態；傳入 undefined 可停止對應欄位的回寫。
+     *
+     * @param {{ volume?: number, muted?: boolean }} state 平台希望維持的媒體狀態。
+     * @returns {void} 無回傳值；副作用是更新測試環境選項。
+     */
+    setPlatformMediaState(state) {
+      environmentOptions.platformVolume = state.volume;
+      environmentOptions.platformMuted = state.muted;
+    },
+    /**
+     * 推進 volumechange burst 判定所使用的測試時間。
+     *
+     * @param {number} milliseconds 要增加的毫秒數。
+     * @returns {void} 無回傳值；副作用是更新 FakeDate.now() 的結果。
+     */
+    advanceTime(milliseconds) {
+      currentTime += milliseconds;
     },
     flushTimers() {
       let safetyCount = 0;
@@ -470,14 +539,23 @@ test('持續大量 mutation 不會讓較早入列的影片工作無限延後', (
   assert.equal(olderVideos.at(-1).volume, 0.25, 'FIFO 應先完成較早入列的 subtree');
 });
 
-test('跨幀等待的中間 sibling 被移除後仍會重新掃描其父層並處理後方影片', () => {
+test('跨幀等待的中間 sibling 被移除後會從 nextSibling 接續且不重掃父層', () => {
   const env = createEnvironment({ volume: 50, muted: true });
   const videos = Array.from({ length: 150 }, () => new env.FakeVideoElement());
   const subtree = new env.FakeElement(videos);
+  let rootFirstChildReads = 0;
+  Object.defineProperty(subtree, 'firstElementChild', {
+    get() {
+      rootFirstChildReads += 1;
+      return subtree.children[0] ?? null;
+    },
+  });
   env.observers[0].emit([{ addedNodes: [subtree] }]);
   env.runAnimationFrame();
+  const initialRootFirstChildReads = rootFirstChildReads;
 
   const removedVideo = videos[100];
+  const nextVideo = videos[101];
   subtree.children.splice(subtree.children.indexOf(removedVideo), 1);
   removedVideo.parentElement = null;
   removedVideo.isConnected = false;
@@ -485,10 +563,16 @@ test('跨幀等待的中間 sibling 被移除後仍會重新掃描其父層並�
     target: subtree,
     addedNodes: [],
     removedNodes: [removedVideo],
+    nextSibling: nextVideo,
   }]);
   env.drainAnimationFrames();
 
   assert.equal(videos.at(-1).volume, 0.25, '移除中間節點不可截斷後方兄弟鏈');
+  assert.equal(
+    rootFirstChildReads,
+    initialRootFirstChildReads,
+    '修復斷鏈只能從 nextSibling 接續，不可重掃大型父層',
+  );
 });
 
 test('沒有待處理 traversal 時的無關 DOM 移除不會建立影片掃描 rAF', () => {
@@ -599,7 +683,7 @@ test('平台可在播放前暫時靜音，playing 後才恢復使用者的未靜
   assert.equal(env.settingsWrites.length, 0);
 });
 
-test('播放中被平台改寫音量與靜音時，volumechange 會恢復鎖定值', () => {
+test('播放中被平台程式改寫音量與靜音時，volumechange 會恢復預設值', () => {
   const env = createEnvironment({ volume: 50, muted: false });
   const video = new env.FakeVideoElement();
   video.paused = false;
@@ -611,6 +695,102 @@ test('播放中被平台改寫音量與靜音時，volumechange 會恢復鎖定�
   assert.equal(video.volume, 0.25);
   assert.equal(video.muted, false);
   assert.equal(env.settingsWrites.length, 0);
+});
+
+test('平台與預設值持續衝突時，volumechange 回授必須在有限事件內停止並放行平台調整', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      simulateMediaEvents: true,
+      platformVolume: 1,
+      platformMuted: true,
+    },
+  );
+  const video = new env.FakeVideoElement();
+  video.paused = false;
+
+  video.volume = 0.75;
+  video.muted = true;
+  const dispatched = env.flushMediaEvents();
+
+  assert.equal(env.pendingMediaEventCount(), 0);
+  assert.ok(dispatched < 50, `事件回授應收斂，實際派送 ${dispatched} 次`);
+  assert.equal(env.settingsWrites.length, 0);
+});
+
+test('單一影片用盡回授額度時，不得阻止其他影片恢復預設值', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      simulateMediaEvents: true,
+      platformVolume: 1,
+      platformMuted: true,
+    },
+  );
+  const conflictingVideo = new env.FakeVideoElement();
+  conflictingVideo.paused = false;
+  conflictingVideo.volume = 0.75;
+  conflictingVideo.muted = true;
+  env.flushMediaEvents();
+
+  env.setPlatformMediaState({ volume: undefined, muted: undefined });
+  const independentVideo = new env.FakeVideoElement();
+  independentVideo.paused = false;
+  independentVideo.volume = 0.75;
+  independentVideo.muted = true;
+  env.flushMediaEvents();
+
+  assert.equal(independentVideo.volume, 0.25);
+  assert.equal(independentVideo.muted, false);
+});
+
+test('衝突事件安靜一秒後，同一影片可重新取得有限修正額度', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      simulateMediaEvents: true,
+      platformVolume: 1,
+      platformMuted: true,
+    },
+  );
+  const video = new env.FakeVideoElement();
+  video.paused = false;
+  video.volume = 0.75;
+  video.muted = true;
+  env.flushMediaEvents();
+
+  env.setPlatformMediaState({ volume: undefined, muted: undefined });
+  video.volume = 0.75;
+  env.flushMediaEvents();
+  assert.equal(video.volume, 0.75, '同一 burst 用盡額度後必須停止對抗');
+
+  env.advanceTime(1001);
+  video.volume = 0.5;
+  env.flushMediaEvents();
+  assert.equal(video.volume, 0.25);
+  assert.equal(video.muted, false);
+});
+
+test('切換到下一次播放時，playing 會重新套用預設音量並重設回授額度', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      simulateMediaEvents: true,
+      platformVolume: 1,
+      platformMuted: true,
+    },
+  );
+  const video = new env.FakeVideoElement();
+  video.paused = false;
+  video.volume = 0.75;
+  video.muted = true;
+  env.flushMediaEvents();
+
+  env.setPlatformMediaState({ volume: undefined, muted: undefined });
+  env.dispatchDocument('playing', { target: video });
+
+  assert.equal(video.volume, 0.25);
+  assert.equal(video.muted, false);
 });
 
 test('只有 Tampermonkey 靜音選單會保存並同步 muted 設定', () => {
