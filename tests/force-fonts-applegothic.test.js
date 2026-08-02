@@ -7,6 +7,7 @@ const { readUserScript, runUserScript } = require('./helpers/userscript-harness'
 
 const SCRIPT_FILE = 'force-fonts-applegothic.user.js';
 const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
+const CODE_FONT = '"Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", AppleGothic, AppleGothicSC, monospace';
 const ICON_TOKENS = [
   'icon', 'iconfont', 'icomoon', 'fontawesome', 'material', 'glyph', 'symbol',
   'octicon', 'feather', 'ionicon', 'themify', 'alibaba', 'anticon', 'boxicon',
@@ -226,6 +227,7 @@ function createEnvironment(options = {}) {
         const part = rawSelector.trim();
         if (part === '*') return true;
         if (/^[a-z][a-z0-9-]*$/i.test(part)) return this.tagName === part.toUpperCase();
+        if (/^#[a-z][a-z0-9-_]*$/i.test(part)) return this.getAttribute('id') === part.slice(1);
 
         const classContains = part.match(/^\[class\*="([^"]+)"(?: i)?\]$/i);
         if (classContains) return this.className.toLowerCase().includes(classContains[1].toLowerCase());
@@ -454,6 +456,23 @@ test('BMP 與補充私用區 code point 都會被標記為 icon', () => {
   assert.equal(bmpPua.hasAttribute('data-no-font'), true);
   assert.equal(supplementaryPuaA.hasAttribute('data-no-font'), true);
   assert.equal(supplementaryPuaB.hasAttribute('data-no-font'), true);
+});
+
+test('GitHub read-only textarea 優先於 aria-hidden Icon 判定並以 inline important 套用程式碼字型', () => {
+  const environment = createEnvironment();
+  const textarea = new environment.FakeElement('textarea', {
+    fontFamily: 'Consolas, monospace',
+    text: '社群媒體影片音量鎖定',
+  });
+  textarea.setAttribute('id', 'read-only-cursor-text-area');
+  textarea.setAttribute('aria-hidden', 'true');
+  appendToBody(environment, textarea);
+
+  runUserScript(SCRIPT_FILE, environment.sandbox);
+
+  assert.equal(textarea.hasAttribute('data-no-font'), false, '程式碼 textarea 不可被 aria-hidden 誤判為 Icon');
+  assert.equal(textarea.style.fontFamily, CODE_FONT);
+  assert.equal(textarea.style.getPropertyPriority('font-family'), 'important');
 });
 
 test('相關屬性與文字變化會讓已處理元素重新判定', () => {
@@ -794,13 +813,14 @@ test('黑名單選單每次重讀設定、以 Set 去重並移除全部目前 ho
   assert.deepEqual(disabledEnvironment.getBlacklist(), ['other.example']);
 });
 
-test('核心 CSS 只引用 TARGET_FONT，程式碼字體順序與文件反向連結維持正確', () => {
+test('核心 CSS 讓 GitHub read-only textarea 使用中文優先於 monospace 的程式碼字型', () => {
   const source = readUserScript(SCRIPT_FILE);
   const styleSource = source.slice(source.indexOf('function initStyles'), source.indexOf('// ===== 常數與狀態'));
   assert.equal((styleSource.match(/\$\{TARGET_FONT\}/g) ?? []).length, 3);
+  assert.match(source, /const CODE_FONT = '"Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", AppleGothic, AppleGothicSC, monospace';/);
   assert.match(
-    source,
-    /font-family: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", monospace, AppleGothic, AppleGothicSC !important;/,
+    styleSource,
+    /#read-only-cursor-text-area,\s+:where\(\[data-hpc="true"\] \*\),/,
   );
   assert.match(source, /維護索引：README\.md「維護索引」/);
 
@@ -808,6 +828,7 @@ test('核心 CSS 只引用 TARGET_FONT，程式碼字體順序與文件反向連
   runUserScript(SCRIPT_FILE, environment.sandbox);
   const css = environment.addedStyles.join('\n');
   assert.ok(css.includes(`font-family: ${TARGET_FONT} !important;`));
+  assert.ok(css.includes(`font-family: ${CODE_FONT} !important;`));
 });
 
 test('正式腳本全部具名函式都有繁體中文 JSDoc', () => {

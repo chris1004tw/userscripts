@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.6
+// @version      0.4.7
 // @description  將頁面字體改為 AppleGothic（簡體用 AppleGothicSC），且還原字體替換對 Icon 的影響
 // @author       chris1004tw
 // @match        *://*/*
@@ -22,6 +22,8 @@
 
     // ===== 目標字體（統一定義）=====
     const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
+    const CODE_FONT = '"Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", AppleGothic, AppleGothicSC, monospace';
+    const CODE_TEXTAREA_SELECTOR = '#read-only-cursor-text-area';
     const TEXT_ELEMENT_SELECTORS = ['p', 'span', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'label', 'article', 'blockquote', 'figcaption', 'cite', 'div'];
     const TEXT_ELEMENT_SELECTOR = TEXT_ELEMENT_SELECTORS.join(',');
 
@@ -222,8 +224,10 @@
             /* 韓文 Hangul 字元強制使用 Malgun Gothic（AppleGothic cmap 聲稱涵蓋但字形缺失） */
             @font-face { font-family: 'AppleGothic'; src: local('Malgun Gothic'); unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF; }
 
-            /* 程式碼區域 - Cascadia Code 等寬字體（先宣告） */
+            /* 程式碼區域 - 英數優先使用等寬字體，中文在 generic monospace 前回退至 AppleGothic */
+            /* GitHub 以獨立 textarea 承載可選取的程式碼文字，需用 exact ID 避免 camelCase class 漏網。 */
             /* 廣泛子代選擇器用 :where() 包裹，避免非程式碼子元素被套用 monospace */
+            #read-only-cursor-text-area,
             :where([data-hpc="true"] *),
             :where(.react-code-lines *),
             :where(.blob-code *),
@@ -244,7 +248,7 @@
             kbd,
             samp,
             tt {
-                font-family: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", monospace, AppleGothic, AppleGothicSC !important;
+                font-family: ${CODE_FONT} !important;
             }
 
             /* 主規則：:where() 使特異性歸零（後宣告，同特異性時覆蓋程式碼區域的 :where() 子代選擇器） */
@@ -313,7 +317,7 @@
      */
     function forceRescan() {
         resetState();
-        const els = document.querySelectorAll(TEXT_ELEMENT_SELECTOR);
+        const els = document.querySelectorAll(`${TEXT_ELEMENT_SELECTOR}, ${CODE_TEXTAREA_SELECTOR}`);
         let iconMarked = 0, inlineOverride = 0;
         for (let i = 0; i < els.length; i++) {
             const result = processElement(els[i]);
@@ -628,7 +632,7 @@
         const originalFont = managedInlineFonts.get(el);
         if (!originalFont) return;
 
-        if (el.style.fontFamily === TARGET_FONT) {
+        if (el.style.fontFamily === TARGET_FONT || el.style.fontFamily === CODE_FONT) {
             if (originalFont.value) {
                 el.style.setProperty('font-family', originalFont.value, originalFont.priority);
             } else {
@@ -636,6 +640,23 @@
             }
         }
         managedInlineFonts.delete(el);
+    }
+
+    /**
+     * 保存原始 inline font-family 後，以 inline important 套用腳本管理的字體。
+     *
+     * @param {Element} el 需要壓過頁面動態樣式的元素。
+     * @param {string} fontFamily TARGET_FONT 或 CODE_FONT 字體堆疊。
+     * @returns {void} 會記錄原始 inline 樣式並修改元素的 font-family。
+     */
+    function applyManagedInlineFont(el, fontFamily) {
+        if (!managedInlineFonts.has(el)) {
+            managedInlineFonts.set(el, {
+                value: el.style.fontFamily,
+                priority: el.style.getPropertyPriority('font-family')
+            });
+        }
+        el.style.setProperty('font-family', fontFamily, 'important');
     }
 
     /**
@@ -694,14 +715,24 @@
     function processElement(el, includeIconDescendants = true) {
         if (el.isConnected === false) return 0;
 
-        const activeIconContainer = findActiveIconContainer(el);
-        if (activeIconContainer) {
-            protectIconDescendant(el, activeIconContainer);
-            return RESULT_ICON;
+        const isCodeTextarea = el.matches?.(CODE_TEXTAREA_SELECTOR) === true;
+        if (!isCodeTextarea) {
+            const activeIconContainer = findActiveIconContainer(el);
+            if (activeIconContainer) {
+                protectIconDescendant(el, activeIconContainer);
+                return RESULT_ICON;
+            }
         }
 
         if (processed.has(el)) return 0;
         processed.add(el);
+
+        // GitHub Code view 的 textarea 可能帶 aria-hidden，必須先於 Icon 判定強制套用 Code 字體。
+        if (isCodeTextarea) {
+            el.removeAttribute('data-no-font');
+            applyManagedInlineFont(el, CODE_FONT);
+            return RESULT_OVERRIDE;
+        }
 
         // 1. 如果是 icon 元素，標記並跳過
         if (isIconElement(el)) {
@@ -722,13 +753,7 @@
                 el.setAttribute('data-no-font', '');
                 return 0;
             }
-            if (!managedInlineFonts.has(el)) {
-                managedInlineFonts.set(el, {
-                    value: originalFontFamily,
-                    priority: el.style.getPropertyPriority('font-family')
-                });
-            }
-            el.style.setProperty('font-family', TARGET_FONT, 'important');
+            applyManagedInlineFont(el, TARGET_FONT);
             if (el.firstElementChild) {
                 el.setAttribute('data-inline-font-scope', '');
             }
@@ -805,7 +830,7 @@
         }
 
         // 2. 再處理其他元素
-        const els = document.querySelectorAll(TEXT_ELEMENT_SELECTOR);
+        const els = document.querySelectorAll(`${TEXT_ELEMENT_SELECTOR}, ${CODE_TEXTAREA_SELECTOR}`);
         processInChunks(els);
     }
 
@@ -863,7 +888,7 @@
         let stopped = false;
 
         // 合併文字元素與 Icon 候選 selector，讓動態新增及變更後的 Icon 都能被偵測。
-        const observerSelector = `${TEXT_ELEMENT_SELECTOR}, ${iconCandidateSelector}`;
+        const observerSelector = `${TEXT_ELEMENT_SELECTOR}, ${CODE_TEXTAREA_SELECTOR}, ${iconCandidateSelector}`;
 
         /**
          * 將元素與工作旗標合併進佇列，避免同一幀重複保留相同 DOM 參照。
@@ -1009,7 +1034,8 @@
                     // 忽略本腳本剛寫入的目標 font-family，避免 style observer 自我重入。
                     if (mutation.attributeName === 'style'
                         && managedInlineFonts.has(mutation.target)
-                        && mutation.target.style.fontFamily === TARGET_FONT) {
+                        && (mutation.target.style.fontFamily === TARGET_FONT
+                            || mutation.target.style.fontFamily === CODE_FONT)) {
                         continue;
                     }
                     queueElement(mutation.target, QUEUE_RECHECK);
