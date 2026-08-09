@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.5
+// @version      0.4.6
 // @description  自動移除 URL 中的追蹤參數，保護您的隱私（部分規則引用自 ClearURLs Project）
 // @author       chris1004tw
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        window.onurlchange
 // @connect      rules1.clearurls.xyz
 // @run-at       document-start
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js
@@ -284,6 +285,11 @@
         cleanCurrentURL();
         return result;
     };
+
+    // Tampermonkey 原生事件能跨越 sandbox，捕捉 Facebook 等 SPA 在頁面 context 執行的 History API 更新。
+    if (window.onurlchange === null) {
+        window.addEventListener('urlchange', cleanCurrentURL);
+    }
 
     // popstate 事件（上一頁/下一頁）
     window.addEventListener('popstate', cleanCurrentURL);

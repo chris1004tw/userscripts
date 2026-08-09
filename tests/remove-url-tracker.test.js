@@ -3,14 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { runUserScript } = require('./helpers/userscript-harness');
+const { readUserScript, runUserScript } = require('./helpers/userscript-harness');
 
 /**
  * 建立 URL 清理腳本需要的最小瀏覽器環境，並以實際 history 副作用觀察清理結果。
  *
  * @param {string} initialHref 測試起始網址。
  * @param {{cachedRules?: string, replaceFailures?: number}} [options={}] 遠端規則快取與模擬失敗次數。
- * @returns {{history: object, href: () => string, replaceAttempts: () => number}} 可操作的測試環境。
+ * @returns {{history: object, href: () => string, pageUrlChange: (url: string) => void, replaceAttempts: () => number}} 可操作的測試環境。
  */
 function createUrlEnvironment(initialHref, options = {}) {
   let currentHref = initialHref;
@@ -54,6 +54,7 @@ function createUrlEnvironment(initialHref, options = {}) {
   };
 
   const window = {
+    onurlchange: null,
     addEventListener(type, listener) {
       listeners.set(type, listener);
     },
@@ -83,6 +84,11 @@ function createUrlEnvironment(initialHref, options = {}) {
   return {
     history,
     href: () => currentHref,
+    pageUrlChange(url) {
+      // 模擬不同 JavaScript context 的頁面路由器改寫 URL，因此刻意不呼叫 userscript 包裝的 History API。
+      updateLocation(url);
+      listeners.get('urlchange')?.({ url: currentHref });
+    },
     replaceAttempts: () => replaceAttempts,
   };
 }
@@ -203,4 +209,23 @@ test('Given userscript 自己的 replaceState 暫時失敗，When 後續 history
   });
   assert.equal(env.replaceAttempts(), 2);
   assert.equal(env.href(), 'https://example.com/page?keep=two');
+});
+
+test('Given Facebook SPA 在頁面 context 寫回追蹤參數，When Tampermonkey 發出 urlchange，Then 再次清除參數', () => {
+  const env = createUrlEnvironment(
+    'https://www.facebook.com/groups/382189418643825/?multi_permalinks=3121063718089701',
+  );
+
+  env.pageUrlChange(
+    'https://www.facebook.com/groups/382189418643825/?multi_permalinks=3121063718089701&hoisted_section_header_type=recently_seen',
+  );
+
+  assert.equal(
+    env.href(),
+    'https://www.facebook.com/groups/382189418643825/?multi_permalinks=3121063718089701',
+  );
+  assert.match(
+    readUserScript('remove-url-tracker.user.js'),
+    /^\/\/ @grant\s+window\.onurlchange$/m,
+  );
 });
