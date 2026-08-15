@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.4.4
-// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Threads、Amazon.co.jp、PChome 與 Shopee 網址轉換）
+// @version      0.4.5
+// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Amazon.co.jp、PChome 與 Shopee 網址轉換）
 // @author       chris1004tw
 // @match        *://*/*
 // @grant        GM_setClipboard
@@ -16,7 +16,6 @@
 // Shopee 短網址轉換參考自 https://github.com/gnehs/userscripts
 // PChome 短網址服務由 https://p.pancake.tw/ 提供
 // X/Twitter 短網址服務由 https://fxtwitter.com/ 提供
-// Threads 嵌入修復服務由 https://github.com/everettsouthwick/vxThreads 提供
 
 (function () {
     'use strict';
@@ -165,33 +164,6 @@
     }
 
     /**
-     * 判斷目前頁面是否為支援的 Threads 主機。
-     *
-     * @returns {boolean} 位於 threads.com（含 www）時回傳 true。
-     * 此函式只讀取 location，無副作用。
-     */
-    function isThreads() {
-        const host = window.location.hostname;
-        return host === 'threads.com' || host === 'www.threads.com';
-    }
-
-    /**
-     * 將 Threads 網址的主機轉換為 vxThreads。
-     * 嵌入修復服務由 https://github.com/everettsouthwick/vxThreads 提供。
-     *
-     * @param {string} url 原始 Threads 網址。
-     * @returns {string} 使用 HTTPS 與 vxthreads.com 主機，並保留路徑、查詢參數及片段的網址。
-     * @throws {TypeError} 傳入無法由 URL API 解析的字串時拋出。
-     * 此函式無副作用。
-     */
-    function convertToVxThreads(url) {
-        const parsed = new URL(url);
-        parsed.protocol = 'https:';
-        parsed.host = 'vxthreads.com';
-        return parsed.href;
-    }
-
-    /**
      * 判斷目前頁面是否為日本 Amazon。
      *
      * @returns {boolean} hostname 精確為 amazon.co.jp 或 www.amazon.co.jp 時回傳 true。
@@ -301,9 +273,6 @@
         if (isXTwitter()) {
             url = convertToFxTwitter(url);
             notificationTitle = '已複製 fxTwitter 網址！';
-        } else if (isThreads()) {
-            url = convertToVxThreads(url);
-            notificationTitle = '已複製 vxThreads 網址！';
         } else if (isAmazonJapan()) {
             const shortUrl = convertToAmazonShort(url);
             if (shortUrl !== url) {

@@ -432,15 +432,15 @@ test('合成鍵盤事件不得寫入剪貼簿，可信事件仍可複製', () =>
   }]);
 });
 
-test('Threads 網址會轉成 vxthreads.com 並保留路徑、查詢參數與片段', () => {
+test('Threads 網址維持原網址，不再轉換成 vxthreads.com', () => {
   const cases = [
     {
       input: 'https://www.threads.com/@user/post/Ab_C?x=1#media',
-      expected: 'https://vxthreads.com/@user/post/Ab_C?x=1#media',
+      expected: 'https://www.threads.com/@user/post/Ab_C?x=1#media',
     },
     {
       input: 'https://threads.com/t/Ab_C?foo=bar#reply',
-      expected: 'https://vxthreads.com/t/Ab_C?foo=bar#reply',
+      expected: 'https://threads.com/t/Ab_C?foo=bar#reply',
     },
   ];
 
