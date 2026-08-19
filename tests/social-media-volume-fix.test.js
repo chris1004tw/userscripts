@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { runUserScript } = require('./helpers/userscript-harness');
+const {
+  readUserScript,
+  runUserScript,
+} = require('./helpers/userscript-harness');
 
 const SCRIPT_FILE = 'social-media-volume-fix.user.js';
 
@@ -13,6 +16,7 @@ const SCRIPT_FILE = 'social-media-volume-fix.user.js';
  * @param {{
  *   denyUnsafeDocumentEvents?: boolean,
  *   denyUnsafeObserverOptions?: boolean,
+ *   isIframe?: boolean,
  *   simulateMediaEvents?: boolean,
  *   platformVolume?: number,
  *   platformMuted?: boolean
@@ -301,7 +305,7 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
     },
   };
   pageWindow.self = pageWindow;
-  pageWindow.top = pageWindow;
+  pageWindow.top = environmentOptions.isIframe ? {} : pageWindow;
 
   // unsafeWindow 使用獨立物件，讓測試能偵測頁面 realm 與 userscript realm 混用。
   const unsafeWindowStub = Object.create(pageWindow);
@@ -487,6 +491,23 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
     },
   };
 }
+
+test('metadata 宣告 @noframes，避免在社群網站 iframe 建立 userscript realm', () => {
+  const source = readUserScript(SCRIPT_FILE);
+  const metadataEnd = source.indexOf('// ==/UserScript==');
+
+  assert.ok(metadataEnd >= 0, '必須存在完整的 userscript metadata');
+  assert.match(source.slice(0, metadataEnd), /^\/\/ @noframes\s*$/m);
+});
+
+test('runtime iframe 防線仍會在任何事件、observer 與選單註冊前返回', () => {
+  const env = createEnvironment({}, { isIframe: true });
+
+  assert.equal(env.observers.length, 0);
+  assert.equal(env.menuRegistrations.length, 0);
+  assert.equal(env.timers.size, 0);
+  assert.equal(env.animationFrames.size, 0);
+});
 
 test('observer callback 不掃描新增子樹，影片改由逐幀 traversal 套用設定', () => {
   const env = createEnvironment({ volume: 50, muted: true });

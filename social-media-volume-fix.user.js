@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         社群媒體影片音量鎖定
 // @namespace    https://chris.taipei
-// @version      0.1.3
+// @version      0.1.4
 // @description  為 Facebook、Instagram、Threads、X 影片設定播放初始音量，並保留平台內建音量滑桿
 // @author       chris1004tw
 // @match        https://*.facebook.com/*
 // @match        https://*.instagram.com/*
 // @match        https://*.threads.com/*
 // @match        https://*.x.com/*
+// @noframes
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
@@ -122,20 +123,6 @@
   }
 
   /**
-   * 判斷影片目前是否已符合可立即套用的鎖定狀態。
-   *
-   * @param {HTMLVideoElement} video 要檢查的影片元素。
-   * @param {boolean} [forceMuted=false] 是否忽略播放狀態並要求靜音值立即一致。
-   * @returns {boolean} 音量與本次應處理的靜音狀態都一致時回傳 true；不產生副作用。
-   */
-  function isMediaStateLocked(video, forceMuted) {
-    if (volDesc.get.call(video) !== cachedVolume) return false;
-
-    var shouldApplyMuted = forceMuted === true || cachedMuted || video.paused === false;
-    return !shouldApplyMuted || mutDesc.get.call(video) === cachedMuted;
-  }
-
-  /**
    * 取得影片目前的 volumechange burst 狀態，安靜滿一秒後建立新的修正額度。
    *
    * 設計意圖：每次事件都更新最後時間，不能因腳本自己的 setter 事件已符合鎖定值就
@@ -190,10 +177,10 @@
     }
 
     var correctionState = getVolumeChangeCorrectionState(event.target);
-    // 自己的 setter 事件通常已符合預設值；平台持續調整時則於兩批修正後 fail-open。
-    if (isMediaStateLocked(event.target, false) ||
-        correctionState.correctionBatches >= MAX_CORRECTION_BATCHES_PER_BURST) return;
+    // 額度用盡後直接 fail-open，避免讀取已不會修正的媒體屬性。
+    if (correctionState.correctionBatches >= MAX_CORRECTION_BATCHES_PER_BURST) return;
 
+    // 套用函式會同時判斷差異；自己的 setter 事件已符合預設值，不會消耗額度。
     if (applySettingsToVideo(event.target, false)) {
       correctionState.correctionBatches += 1;
     }
@@ -341,12 +328,9 @@
       if (item.node.isConnected === false) continue;
 
       if (isVideoElement(item.node)) applySettingsToVideo(item.node);
-      if (item.node.firstElementChild) {
-        enqueueVideoScanNode(
-          item.node.firstElementChild,
-          item.node.firstElementChild.nextElementSibling,
-          true
-        );
+      var firstChild = item.node.firstElementChild;
+      if (firstChild) {
+        enqueueVideoScanNode(firstChild, firstChild.nextElementSibling, true);
       }
     }
 
