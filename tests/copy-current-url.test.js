@@ -410,6 +410,29 @@ function triggerTrustedCopyShortcut(environment) {
   }));
 }
 
+test('metadata 宣告 @noframes，避免注入 iframe', () => {
+  const source = readUserScript('copy-current-url.user.js');
+  const metadataEnd = source.indexOf('// ==/UserScript==');
+
+  assert.ok(metadataEnd >= 0, '必須存在完整的 userscript metadata');
+  assert.match(source.slice(0, metadataEnd), /^\/\/ @noframes\s*$/m);
+});
+
+test('iframe 防禦性 early return 不得註冊複製快捷鍵', () => {
+  const environment = createBrowserEnvironment(
+    'https://www.browserbench.org/Speedometer3.1/suites/todomvc/index.html'
+  );
+  environment.window.top = {};
+
+  runUserScript('copy-current-url.user.js', environment.sandbox);
+  triggerTrustedCopyShortcut(environment);
+
+  assert.equal(environment.clipboardWrites.length, 0);
+  assert.equal(environment.observers.length, 0);
+  assert.equal(environment.scheduler.activeTimeoutCount(), 0);
+  assert.equal(environment.scheduler.activeAnimationFrameCount(), 0);
+});
+
 test('合成鍵盤事件不得寫入剪貼簿，可信事件仍可複製', () => {
   const environment = runCopyUrlScript();
   const syntheticEvent = createObservedEvent({
@@ -535,4 +558,120 @@ test('metadata 後提供 README 維護索引反向連結', () => {
   const iifeStart = source.indexOf('(function ()');
   assert.ok(metadataEnd >= 0 && iifeStart > metadataEnd);
   assert.match(source.slice(metadataEnd, iifeStart), /README\.md.*維護索引/);
+});
+
+test('PChome 商品頁轉換為 Pancake 網址，其他頁面維持原網址', () => {
+  const cases = [
+    {
+      input: 'https://24h.pchome.com.tw/prod/DSAA31-A900H4QXL?fq=/S/DSAA31#detail',
+      expected: 'https://p.pancake.tw/prod/DSAA31-A900H4QXL',
+    },
+    {
+      input: 'https://24h.pchome.com.tw/search/?q=keyboard',
+      expected: 'https://24h.pchome.com.tw/search/?q=keyboard',
+    },
+    {
+      input: 'https://24h.pchome.com.tw.example.org/prod/DSAA31-A900H4QXL',
+      expected: 'https://24h.pchome.com.tw.example.org/prod/DSAA31-A900H4QXL',
+    },
+  ];
+
+  for (const { input, expected } of cases) {
+    const environment = runCopyUrlScript(input);
+    triggerTrustedCopyShortcut(environment);
+    assert.deepEqual(environment.clipboardWrites, [{
+      value: expected,
+      type: 'text',
+    }], input);
+  }
+});
+
+test('Shopee 商品網址只接受數字 ID，並統一成無追蹤參數的 product 路徑', () => {
+  const cases = [
+    {
+      input: 'https://shopee.tw/example-product-i.123456.987654?sp_atk=tracking#detail',
+      expected: 'https://shopee.tw/product/123456/987654',
+    },
+    {
+      input: 'https://shopee.tw/product/123456/987654?sp_atk=tracking#detail',
+      expected: 'https://shopee.tw/product/123456/987654',
+    },
+    {
+      input: 'https://shopee.tw/example-product-i.foo.bar?sp_atk=tracking',
+      expected: 'https://shopee.tw/example-product-i.foo.bar?sp_atk=tracking',
+    },
+  ];
+
+  for (const { input, expected } of cases) {
+    const environment = runCopyUrlScript(input);
+    triggerTrustedCopyShortcut(environment);
+    assert.deepEqual(environment.clipboardWrites, [{
+      value: expected,
+      type: 'text',
+    }], input);
+  }
+});
+
+test('X 轉換透過 URL 欄位正規化協定、主機與連接埠', () => {
+  const environment = runCopyUrlScript(
+    'http://www.twitter.com:8080/user/status/123?lang=zh-TW#media'
+  );
+
+  triggerTrustedCopyShortcut(environment);
+
+  assert.deepEqual(environment.clipboardWrites, [{
+    value: 'https://fxtwitter.com/user/status/123?lang=zh-TW#media',
+    type: 'text',
+  }]);
+});
+
+test('快捷鍵只接受未重複且沒有 Alt 或 Meta 的 Ctrl+Shift+C', () => {
+  const environment = runCopyUrlScript();
+  const invalidEvents = [
+    { altKey: true, metaKey: false, repeat: false },
+    { altKey: false, metaKey: true, repeat: false },
+    { altKey: false, metaKey: false, repeat: true },
+  ];
+
+  for (const modifiers of invalidEvents) {
+    const event = createObservedEvent({
+      type: 'keydown',
+      isTrusted: true,
+      ctrlKey: true,
+      shiftKey: true,
+      code: 'KeyC',
+      ...modifiers,
+    });
+    environment.document.dispatchEvent(event);
+    assert.equal(event.prevented, 0);
+    assert.equal(event.stopped, 0);
+  }
+
+  assert.equal(environment.clipboardWrites.length, 0);
+  triggerTrustedCopyShortcut(environment);
+  assert.equal(environment.clipboardWrites.length, 1);
+});
+
+test('複製通知建立一次樣式，並在顯示時間結束後移除', async () => {
+  const environment = runCopyUrlScript('https://example.com/path');
+
+  triggerTrustedCopyShortcut(environment);
+  await Promise.resolve();
+
+  assert.equal(environment.document.head.children.length, 1);
+  assert.equal(environment.document.head.children[0].id, 'copy-url-notification-style');
+  assert.equal(environment.document.body.children.length, 1);
+  assert.equal(environment.document.body.children[0].children[0].textContent, '已複製網址！');
+  assert.equal(
+    environment.document.body.children[0].children[1].textContent,
+    'https://example.com/path'
+  );
+  assert.deepEqual(environment.scheduler.timeoutIdsByDelay(2000).length, 1);
+
+  assert.equal(environment.scheduler.runTimeoutByDelay(2000), true);
+  assert.equal(environment.document.body.children.length, 0);
+
+  triggerTrustedCopyShortcut(environment);
+  await Promise.resolve();
+  assert.equal(environment.document.head.children.length, 1);
 });

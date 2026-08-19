@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.4.5
+// @version      0.4.6
 // @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Amazon.co.jp、PChome 與 Shopee 網址轉換）
 // @author       chris1004tw
 // @match        *://*/*
+// @noframes
 // @grant        GM_setClipboard
 // @run-at       document-end
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js
@@ -154,13 +155,18 @@
      * 嵌入修復服務由 https://fxtwitter.com/ 提供。
      *
      * @param {string} url 原始 X/Twitter 網址。
-     * @returns {string} 主機已轉換的網址；非支援主機則維持原字串。
+     * @returns {string} 協定與主機正規化為 https://fxtwitter.com 且移除原連接埠的網址。
+     * @throws {TypeError} 傳入無法由 URL API 解析的字串時拋出。
      * 此函式無副作用。
      */
     function convertToFxTwitter(url) {
-        return url
-            .replace(/https?:\/\/(www\.)?x\.com/, 'https://fxtwitter.com')
-            .replace(/https?:\/\/(www\.)?twitter\.com/, 'https://fxtwitter.com');
+        const parsed = new URL(url);
+
+        // 直接修改 URL 欄位，避免字串替換誤保留原站的非標準連接埠。
+        parsed.protocol = 'https:';
+        parsed.hostname = 'fxtwitter.com';
+        parsed.port = '';
+        return parsed.href;
     }
 
     /**
@@ -211,25 +217,24 @@
      * 轉換規則參考自 https://github.com/gnehs/userscripts。
      *
      * @param {string} url 原始 Shopee 網址。
-     * @returns {string} 可辨識商品頁時回傳短網址，否則回傳原網址。
+     * @returns {string} 數字商品 ID 路徑回傳無 query 與 fragment 的標準短網址，否則回傳原網址。
      * @throws {TypeError} 傳入無法由 URL API 解析的字串時拋出。
      * 此函式無副作用。
      */
     function convertToShopeeShort(url) {
         const parsed = new URL(url);
 
-        // 取路徑最後一段，以 - 分隔
-        const pathParts = parsed.pathname.split('-');
-        const lastPart = pathParts[pathParts.length - 1];
+        // 同時支援商品名稱-i.shopId.itemId 與既有 product/shopId/itemId 路徑；
+        // ID 限定為數字，避免將外觀相似的一般頁面誤判為商品頁。
+        const match = parsed.pathname.match(
+            /(?:^|[-/])i\.(\d+)\.(\d+)\/?$/
+        ) || parsed.pathname.match(
+            /^\/product\/(\d+)\/(\d+)\/?$/
+        );
 
-        // 檢查是否為 i.shopId.itemId 格式
-        const shopeePath = lastPart.split('.');
-        if (shopeePath[0] === 'i' && shopeePath.length === 3) {
-            return 'https://shopee.tw/product/' + shopeePath[1] + '/' + shopeePath[2];
-        }
-
-        // 非商品頁面，回傳原網址
-        return url;
+        return match
+            ? `https://shopee.tw/product/${match[1]}/${match[2]}`
+            : url;
     }
 
     /**
@@ -304,7 +309,8 @@
         if (!e.isTrusted) return;
 
         // Ctrl+Shift+C
-        if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+        if (e.code === 'KeyC' && e.ctrlKey && e.shiftKey &&
+            !e.altKey && !e.metaKey && !e.repeat) {
             e.preventDefault();
             e.stopPropagation();
             copyCurrentUrl();
