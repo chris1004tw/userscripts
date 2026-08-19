@@ -268,24 +268,6 @@ function createEventTarget() {
 }
 
 /**
- * 收集 subtree 內的文字節點，供最小 TreeWalker 逐一過濾。
- *
- * @param {FakeElement} root 走訪根元素。
- * @returns {FakeTextNode[]} 全部文字後代。
- */
-function collectTextNodes(root) {
-  const textNodes = [];
-  for (const child of root.children) {
-    if (child instanceof FakeTextNode) {
-      textNodes.push(child);
-    } else {
-      textNodes.push(...collectTextNodes(child));
-    }
-  }
-  return textNodes;
-}
-
-/**
  * 建立最小 document、MutationObserver 與瀏覽器生命週期環境。
  *
  * @returns {{
@@ -301,28 +283,9 @@ function createBrowserEnvironment() {
   const body = new FakeElement('body');
   setConnected(body, true);
   const window = createEventTarget();
-  const nodeFilter = {
-    SHOW_TEXT: 4,
-    FILTER_ACCEPT: 1,
-    FILTER_SKIP: 3,
-  };
-
-  const document = {
-    body,
-    createTreeWalker: (root, _whatToShow, filter) => {
-      const nodes = collectTextNodes(root);
-      let index = 0;
-      return {
-        nextNode: () => {
-          while (index < nodes.length) {
-            const node = nodes[index++];
-            if (filter.acceptNode(node) === nodeFilter.FILTER_ACCEPT) return node;
-          }
-          return null;
-        },
-      };
-    },
-  };
+  window.self = window;
+  window.top = window;
+  const document = { body };
 
   /** @type {FakeMutationObserver[]} */
   const observers = [];
@@ -358,7 +321,6 @@ function createBrowserEnvironment() {
       window,
       document,
       Element: FakeElement,
-      NodeFilter: nodeFilter,
       MutationObserver: FakeMutationObserver,
       requestAnimationFrame: scheduler.requestAnimationFrame,
       cancelAnimationFrame: scheduler.cancelAnimationFrame,
@@ -409,7 +371,19 @@ function runThreadsScript(environment) {
   runUserScript('threads-auto-reveal-spoiler.user.js', environment.sandbox);
 }
 
-test('初次掃描維持文字、圖片與影片 Spoiler 揭露行為', () => {
+/**
+ * 執行目前排定的全部 animation frame。
+ *
+ * @param {ReturnType<typeof createBrowserEnvironment>} environment 要推進的瀏覽器環境。
+ * @returns {void} 無回傳值；會同步執行佇列直到沒有待處理 frame。
+ */
+function finishScheduledFrames(environment) {
+  while (environment.scheduler.runNext()) {
+    // 排程器每次回呼可能再排下一幀，持續推進到 traversal 完成。
+  }
+}
+
+test('初次掃描使用逐幀 traversal 揭露文字、圖片與影片 Spoiler', () => {
   const environment = createBrowserEnvironment();
   const textButton = createTextSpoilerButton();
   const imageButton = createMediaSpoilerButton('img', '劇透');
@@ -417,18 +391,31 @@ test('初次掃描維持文字、圖片與影片 Spoiler 揭露行為', () => {
   const normalImageButton = createMediaSpoilerButton('img', '一般內容');
   [textButton, imageButton, videoButton, normalImageButton]
     .forEach((button) => environment.body.appendChild(button));
+  let bodyQuerySelectorAllCalls = 0;
+  const originalBodyQuerySelectorAll = environment.body.querySelectorAll.bind(environment.body);
+  environment.body.querySelectorAll = (selector) => {
+    bodyQuerySelectorAllCalls += 1;
+    return originalBodyQuerySelectorAll(selector);
+  };
 
   runThreadsScript(environment);
+
+  assert.equal(textButton.clickCount, 0, '初次掃描不得同步遍歷整個 body');
+  assert.equal(bodyQuerySelectorAllCalls, 0, '初次掃描不得使用全頁 querySelectorAll');
+  assert.equal(environment.scheduler.activeCount(), 1);
+  finishScheduledFrames(environment);
 
   assert.equal(textButton.clickCount, 1);
   assert.equal(imageButton.clickCount, 1);
   assert.equal(videoButton.clickCount, 1);
   assert.equal(normalImageButton.clickCount, 0);
+  assert.equal(bodyQuerySelectorAllCalls, 0);
 });
 
 test('大量兄弟根節點入列不呼叫 contains 做平方級合併', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
   let containsCalls = 0;
   const roots = Array.from({ length: 150 }, () => {
     const root = new FakeElement('div');
@@ -449,13 +436,16 @@ test('大量兄弟根節點入列不呼叫 contains 做平方級合併', () => {
 test('單一大型新增 subtree 的探索與揭露都受每幀 100 節點預算限制', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
 
   const root = new FakeElement('section');
-  const buttons = Array.from({ length: 150 }, () => {
+  const nonElementResumeSibling = new FakeTextNode(' ');
+  const buttons = Array.from({ length: 150 }, (_, index) => {
     const button = new FakeElement('span');
     button.setAttribute('role', 'button');
     button.setAttribute('data-text-fragment', 'spoiler');
     root.appendChild(button);
+    if (index === 51) root.appendChild(nonElementResumeSibling);
     return button;
   });
   const mediaButton = createMediaSpoilerButton('video', 'Spoiler');
@@ -482,11 +472,11 @@ test('單一大型新增 subtree 的探索與揭露都受每幀 100 節點預算
     return originalMediaButtonQuerySelectorAll(selector);
   };
 
-  let mediaButtonTreeWalkerCalls = 0;
-  const originalCreateTreeWalker = environment.sandbox.document.createTreeWalker;
-  environment.sandbox.document.createTreeWalker = (walkerRoot, whatToShow, filter) => {
-    if (walkerRoot === nonSpoilerMediaButton) mediaButtonTreeWalkerCalls += 1;
-    return originalCreateTreeWalker(walkerRoot, whatToShow, filter);
+  let prefixButtonMatchCalls = 0;
+  const originalPrefixButtonMatches = buttons[0].matches.bind(buttons[0]);
+  buttons[0].matches = (selector) => {
+    prefixButtonMatchCalls += 1;
+    return originalPrefixButtonMatches(selector);
   };
 
   environment.observers[0].emit([{ addedNodes: [root] }]);
@@ -501,15 +491,24 @@ test('單一大型新增 subtree 的探索與揭露都受每幀 100 節點預算
   );
   assert.equal(mediaButton.clickCount, 0, 'subtree 尾端的媒體候選不可繞過本幀節點預算');
   assert.equal(environment.scheduler.activeCount(), 1);
+  const prefixButtonMatchCallsBeforeRemoval = prefixButtonMatchCalls;
 
-  // 第 52 個按鈕此時只被前一個 work item 保存為 nextSibling；先移除它會讓舊鏈失去後續兄弟。
+  // 第 52 個按鈕此時只被前一個 work item 保存為 nextSibling；移除後須越過文字 sibling 局部續接。
   const removedMiddleButton = buttons[51];
+  assert.equal(removedMiddleButton.nextSibling, nonElementResumeSibling);
   removedMiddleButton.remove();
+  const sameBatchAddedButton = createTextSpoilerButton();
+  const resumeIndex = root.children.indexOf(nonElementResumeSibling);
+  root.children.splice(resumeIndex, 0, sameBatchAddedButton);
+  sameBatchAddedButton.parentElement = root;
+  sameBatchAddedButton.parentNode = root;
+  setConnected(sameBatchAddedButton, true);
   environment.observers[0].emit([{
     type: 'childList',
     target: root,
-    addedNodes: [],
+    addedNodes: [sameBatchAddedButton],
     removedNodes: [removedMiddleButton],
+    nextSibling: nonElementResumeSibling,
   }]);
 
   let remainingFrames = 0;
@@ -521,7 +520,13 @@ test('單一大型新增 subtree 的探索與揭露都受每幀 100 節點預算
   assert.equal(
     buttons.filter((button) => button !== removedMiddleButton && button.clickCount === 1).length,
     149,
-    'removedNodes 造成的斷鏈須透過增量重排補齊後方兄弟',
+    'removedNodes 造成的斷鏈須從 nextSibling 局部補齊後方兄弟',
+  );
+  assert.equal(sameBatchAddedButton.clickCount, 1, '同批 addedNodes 仍須獨立排入並揭露');
+  assert.equal(
+    prefixButtonMatchCalls,
+    prefixButtonMatchCallsBeforeRemoval,
+    '局部續接不得從大型 mutation target 開頭重掃已處理節點',
   );
   assert.equal(mediaButton.clickCount, 1, '後續幀仍須保留媒體 Spoiler 判定');
   assert.equal(nonSpoilerMediaButton.clickCount, 0, '沒有 Spoiler 標籤的媒體按鈕不可被點擊');
@@ -530,21 +535,21 @@ test('單一大型新增 subtree 的探索與揭露都受每幀 100 節點預算
     0,
     '動態媒體候選不得反覆對整個按鈕執行 descendant query',
   );
-  assert.equal(
-    mediaButtonTreeWalkerCalls,
-    0,
-    '動態媒體候選不得反覆以 TreeWalker 掃描整個按鈕',
-  );
   assert.equal(environment.scheduler.activeCount(), 0);
 });
 
 test('閒置時的 removedNodes 不會啟動整棵增量重掃', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
   const container = new FakeElement('div');
   const removedNode = new FakeElement('span');
+  const nonElementResumeSibling = new FakeTextNode(' ');
+  const followingButton = createTextSpoilerButton();
   environment.body.appendChild(container);
   container.appendChild(removedNode);
+  container.appendChild(nonElementResumeSibling);
+  container.appendChild(followingButton);
   removedNode.remove();
 
   environment.observers[0].emit([{
@@ -552,15 +557,18 @@ test('閒置時的 removedNodes 不會啟動整棵增量重掃', () => {
     target: container,
     addedNodes: [],
     removedNodes: [removedNode],
+    nextSibling: nonElementResumeSibling,
   }]);
 
   assert.equal(environment.scheduler.activeCount(), 0, '閒置 removal 不得建立新的 animation frame');
   assert.equal(environment.scheduler.runNext(), false, '沒有既有 traversal 時不需要補掃 sibling 鏈');
+  assert.equal(followingButton.clickCount, 0, '閒置 removal 不得沿 nextSibling 啟動局部續接');
 });
 
 test('入列後已斷線的根節點不會被掃描', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
   const button = createTextSpoilerButton();
   environment.body.appendChild(button);
   environment.observers[0].emit([{ addedNodes: [button] }]);
@@ -575,6 +583,7 @@ test('入列後已斷線的根節點不會被掃描', () => {
 test('beforeunload 與 bfcache pagehide 後仍會揭露續存頁面的新增 Spoiler', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
 
   environment.window.dispatchEvent({ type: 'beforeunload' });
   environment.window.dispatchEvent({ type: 'pagehide', persisted: true });
@@ -590,6 +599,7 @@ test('beforeunload 與 bfcache pagehide 後仍會揭露續存頁面的新增 Spo
 test('非 bfcache pagehide 才中斷 observer、取消 rAF 並清空待掃描根節點', () => {
   const environment = createBrowserEnvironment();
   runThreadsScript(environment);
+  finishScheduledFrames(environment);
   const button = createTextSpoilerButton();
   environment.body.appendChild(button);
   environment.observers[0].emit([{ addedNodes: [button] }]);
@@ -603,12 +613,88 @@ test('非 bfcache pagehide 才中斷 observer、取消 rAF 並清空待掃描根
   assert.equal(button.clickCount, 0);
 });
 
-test('metadata 說明包含影片並提供 README 維護索引反向連結', () => {
+test('metadata 禁止 iframe，並說明影片功能與提供 README 維護索引反向連結', () => {
   const source = readUserScript('threads-auto-reveal-spoiler.user.js');
-  assert.match(source, /@description\s+.*文字、圖片與影片內容/);
-
   const metadataEnd = source.indexOf('// ==/UserScript==');
+  const metadata = source.slice(0, metadataEnd);
   const iifeStart = source.indexOf('(function ()');
+
+  assert.match(metadata, /^\/\/ @noframes\s*$/m);
+  assert.match(metadata, /^\/\/ @description\s+.*影片.*$/m);
   assert.ok(metadataEnd >= 0 && iifeStart > metadataEnd);
   assert.match(source.slice(metadataEnd, iifeStart), /README\.md.*維護索引/);
+});
+
+test('進行中 traversal 忽略 activeRoot 外部 removal 的續接節點', () => {
+  const environment = createBrowserEnvironment();
+  runThreadsScript(environment);
+  finishScheduledFrames(environment);
+
+  const activeRoot = new FakeElement('section');
+  for (let index = 0; index < 120; index++) {
+    activeRoot.appendChild(createTextSpoilerButton());
+  }
+  environment.body.appendChild(activeRoot);
+  environment.observers[0].emit([{ addedNodes: [activeRoot], removedNodes: [] }]);
+  assert.equal(environment.scheduler.runNext(), true);
+  assert.equal(environment.scheduler.activeCount(), 1, '大型 activeRoot 應保留後續幀工作');
+
+  const unrelatedContainer = new FakeElement('section');
+  const removedNode = new FakeElement('span');
+  const unrelatedButton = createTextSpoilerButton();
+  unrelatedContainer.appendChild(removedNode);
+  unrelatedContainer.appendChild(unrelatedButton);
+  environment.body.appendChild(unrelatedContainer);
+  removedNode.remove();
+  environment.observers[0].emit([{
+    type: 'childList',
+    target: unrelatedContainer,
+    addedNodes: [],
+    removedNodes: [removedNode],
+    nextSibling: unrelatedButton,
+  }]);
+
+  finishScheduledFrames(environment);
+  assert.equal(unrelatedButton.clickCount, 0);
+});
+
+test('runtime iframe 防線不建立 observer 或初始掃描工作', () => {
+  const environment = createBrowserEnvironment();
+  environment.window.top = {};
+
+  runThreadsScript(environment);
+
+  assert.equal(environment.observers.length, 0);
+  assert.equal(environment.scheduler.activeCount(), 0);
+});
+
+test('簡體中文媒體 Spoiler 標籤可以被揭露', () => {
+  const environment = createBrowserEnvironment();
+  const simplifiedChineseButton = createMediaSpoilerButton('img', '剧透');
+  environment.body.appendChild(simplifiedChineseButton);
+
+  runThreadsScript(environment);
+  finishScheduledFrames(environment);
+
+  assert.equal(simplifiedChineseButton.clickCount, 1);
+});
+
+test('單一按鈕 click 拋錯不會中斷後續 Spoiler 掃描', () => {
+  const environment = createBrowserEnvironment();
+  const faultyButton = createTextSpoilerButton();
+  const validButton = createTextSpoilerButton();
+  let faultyClickAttempts = 0;
+  faultyButton.click = () => {
+    faultyClickAttempts += 1;
+    throw new Error('模擬非標準按鈕 click 失敗');
+  };
+  environment.body.appendChild(faultyButton);
+  environment.body.appendChild(validButton);
+
+  assert.doesNotThrow(() => {
+    runThreadsScript(environment);
+    finishScheduledFrames(environment);
+  });
+  assert.equal(faultyClickAttempts, 1);
+  assert.equal(validButton.clickCount, 1);
 });

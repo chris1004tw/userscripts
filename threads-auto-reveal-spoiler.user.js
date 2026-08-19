@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Threads 自動點擊 Spoiler
 // @namespace    https://chris.taipei
-// @version      0.1.1
+// @version      0.1.2
 // @description  自動點擊 Threads 的 Spoiler 按鈕，揭露被隱藏的文字、圖片與影片內容
 // @author       chris1004tw
 // @match        https://www.threads.com/*
+// @noframes
 // @grant        none
 // @run-at       document-idle
 // @updateURL    https://github.com/chris1004tw/userscripts/raw/main/threads-auto-reveal-spoiler.user.js
@@ -17,13 +18,22 @@
 (function () {
   'use strict';
 
+  // Metadata 已禁止 iframe；runtime 防線避免管理器忽略 metadata 時重複掃描。
+  try {
+    if (window.self !== window.top) return;
+  } catch {
+    return;
+  }
+
   const BUTTON_SELECTOR = '[role="button"]';
   const TEXT_SPOILER_SELECTOR = '[data-text-fragment="spoiler"]';
   const MEDIA_CONTENT_SELECTOR = 'img, video, picture';
   const MAX_SCAN_WORK_PER_FRAME = 100;
+  const MAX_SPOILER_LABEL_LENGTH = 32;
   const MEDIA_SPOILER_LABELS = new Set([
     'spoiler',
     '劇透',
+    '剧透',
     '爆雷',
     '스포일러',
     'ネタバレ',
@@ -77,33 +87,19 @@
   let scanFrameId;
 
   /**
-   * 對尚未處理的 Spoiler 按鈕執行點擊。
+   * 對尚未處理且支援 click 的 Spoiler 按鈕執行點擊。
    *
-   * @param {Element | null} btn 待揭露的按鈕；null 或已處理按鈕會直接略過。
-   * @returns {void} 無回傳值；有效按鈕會加入 processed 並觸發一次 click。
+   * @param {Element | null} btn 待揭露的按鈕；null、已處理或無 click 方法時直接略過。
+   * @returns {void} 無回傳值；成功點擊後加入 processed，單一按鈕失敗不影響後續掃描。
    */
   function clickIfNeeded(btn) {
-    if (!btn || processed.has(btn)) return;
+    if (!btn || processed.has(btn) || typeof btn.click !== 'function') return;
 
-    processed.add(btn);
-    btn.click();
-  }
-
-  /**
-   * 在 root 本身與其 subtree 內執行 selector 掃描。
-   *
-   * @param {ParentNode} root 掃描起點，可為元素或文件片段。
-   * @param {string} selector 用來篩選目標元素的 CSS selector。
-   * @param {(element: Element) => void} callback 每個符合元素要執行的處理函式。
-   * @returns {void} 無回傳值；副作用由 callback 決定。
-   */
-  function forEachMatch(root, selector, callback) {
-    if (root instanceof Element && root.matches(selector)) {
-      callback(root);
-    }
-
-    if ('querySelectorAll' in root) {
-      root.querySelectorAll(selector).forEach(callback);
+    try {
+      btn.click();
+      processed.add(btn);
+    } catch {
+      // Threads 的非標準 role=button 不得中斷整個逐幀 traversal。
     }
   }
 
@@ -118,63 +114,19 @@
   }
 
   /**
-   * 判斷節點是否包含已支援語系的 Spoiler 標籤文案。
+   * 判斷單一文字節點是否為支援語系的 Spoiler 標籤。
    *
-   * @param {ParentNode} root 要搜尋文字節點的 subtree 根節點。
-   * @returns {boolean} 找到完全相符的正規化標籤時為 true；只讀取 DOM，不產生副作用。
+   * 設計意圖：多數動態牆文字都不是短標籤，先直接查 Set 並排除長文字，
+   * 避免對每個文字節點都執行會配置新字串的空白正規化與小寫轉換。
+   *
+   * @param {string | null | undefined} value 待判定的文字內容。
+   * @returns {boolean} 完全相符或正規化後相符時回傳 true；不修改 DOM。
    */
-  function hasSpoilerLabel(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        return MEDIA_SPOILER_LABELS.has(normalizeText(node.textContent))
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_SKIP;
-      },
-    });
-
-    return walker.nextNode() !== null;
-  }
-
-  /**
-   * 判斷按鈕是否符合媒體 Spoiler overlay 的結構與標籤。
-   *
-   * @param {Element | null} btn 待驗證的按鈕元素。
-   * @returns {boolean} 尚未處理、包含媒體且具有 Spoiler 標籤時為 true；只讀取 DOM。
-   */
-  function isMediaSpoilerButton(btn) {
-    if (!btn || processed.has(btn)) return false;
-    if (btn.querySelector(TEXT_SPOILER_SELECTOR)) return false;
-    if (!btn.querySelector(MEDIA_CONTENT_SELECTOR)) return false;
-
-    return hasSpoilerLabel(btn);
-  }
-
-  /**
-   * 掃描指定 subtree 中的 Spoiler 元素並自動點擊揭露。
-   *
-   * 處理兩種 Spoiler 類型：
-   * 1. 文字 spoiler — 透過 [data-text-fragment="spoiler"] 屬性定位，
-   *    往上找到 [role="button"] 祖先後點擊
-   * 2. 媒體 spoiler（圖片/影片）— 從媒體節點回推按鈕，再用 overlay label 驗證
-   *
-   * @param {ParentNode} root 要掃描的 subtree 根節點。
-   * @returns {void} 無回傳值；副作用是點擊尚未處理的文字與媒體 Spoiler 按鈕。
-   */
-  function revealSpoilersIn(root) {
-    // 初次掃描只執行一次；媒體候選先以 Set 合併，避免同一按鈕重複驗證。
-    forEachMatch(root, TEXT_SPOILER_SELECTOR, element => {
-      clickIfNeeded(element.closest(BUTTON_SELECTOR));
-    });
-
-    const mediaButtons = new Set();
-    forEachMatch(root, MEDIA_CONTENT_SELECTOR, element => {
-      const btn = element.closest(BUTTON_SELECTOR);
-      if (btn) mediaButtons.add(btn);
-    });
-
-    mediaButtons.forEach(btn => {
-      if (isMediaSpoilerButton(btn)) clickIfNeeded(btn);
-    });
+  function isSpoilerLabel(value) {
+    if (!value) return false;
+    if (MEDIA_SPOILER_LABELS.has(value)) return true;
+    if (value.length > MAX_SPOILER_LABEL_LENGTH) return false;
+    return MEDIA_SPOILER_LABELS.has(normalizeText(value));
   }
 
   /**
@@ -227,7 +179,7 @@
 
     const isTextSpoiler = Boolean(element?.matches(TEXT_SPOILER_SELECTOR));
     const isMedia = Boolean(element?.matches(MEDIA_CONTENT_SELECTOR));
-    const isLabel = node.nodeType === 3 && MEDIA_SPOILER_LABELS.has(normalizeText(node.textContent));
+    const isLabel = node.nodeType === 3 && isSpoilerLabel(node.textContent);
     if (!isTextSpoiler && !isMedia && !isLabel) return;
 
     if (isTextSpoiler) {
@@ -400,6 +352,28 @@
     scanFrameId = requestAnimationFrame(processPendingNodes);
   }
 
+  /**
+   * 從 childList removal 後方的原生 nextSibling 局部接續既有 traversal。
+   *
+   * 設計意圖：ScanWorkItem 本來就支援任意 Node，因此直接保留文字或註解 sibling
+   * 才能維持完整鏈結，並避免回到 mutation.target 重掃大型動態牆容器。同批
+   * addedNodes 仍由 observer 的既有新增節點分支獨立入列。
+   *
+   * @param {Node | null} node 移除區段後方的第一個原生 sibling，可能是元素或非元素節點。
+   * @returns {void} 只有既有 traversal 尚未完成、節點仍連線且位於 activeRoot 時，
+   * 才會加入局部續接工作。
+   */
+  function queueScanContinuation(node) {
+    if (!pending || !activeRoot || !node || node.isConnected === false) return;
+    if (!activeRoot.contains(node)) return;
+
+    activeScanItems.push({
+      node,
+      nextSibling: node.nextSibling,
+      finalizeButton: null,
+    });
+  }
+
   // ═══════════════════════════════════════════
   //  MutationObserver：監聽動態載入的內容
   // ═══════════════════════════════════════════
@@ -410,15 +384,8 @@
    */
   const observer = new MutationObserver(mutations => {
     mutations.forEach(mutation => {
-      if (pending && (mutation.removedNodes?.length || 0) > 0) {
-        const target = mutation.target instanceof Element
-          ? mutation.target
-          : mutation.target.parentElement;
-
-        // 只在既有 traversal 期間補救 sibling 斷鏈，避免閒置 removal 啟動整棵重掃。
-        if (target) {
-          queueScan(target);
-        }
+      if ((mutation.removedNodes?.length || 0) > 0) {
+        queueScanContinuation(mutation.nextSibling);
       }
 
       mutation.addedNodes.forEach(node => {
@@ -436,8 +403,8 @@
 
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // 初次掃描
-  revealSpoilersIn(document.body);
+  // 初次內容沿用相同逐幀 traversal，避免 document-idle 同步掃描整個頁面。
+  queueScan(document.body);
 
   /**
    * 終局 pagehide 時停止 DOM 監聽並丟棄尚未執行的逐幀工作。
