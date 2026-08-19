@@ -15,9 +15,9 @@ const SCRIPT_INDEX = [
   { file: 'copy-current-url.user.js', entry: 'copyCurrentUrl', test: 'tests/copy-current-url.test.js' },
   { file: 'social-media-volume-fix.user.js', entry: 'syncToPage', test: 'tests/social-media-volume-fix.test.js' },
   { file: 'bypass-medium-paywall.user.js', entry: 'redirect', test: 'tests/bypass-medium-paywall.test.js' },
-  { file: 'threads-auto-reveal-spoiler.user.js', entry: 'revealSpoilersIn', test: 'tests/threads-auto-reveal-spoiler.test.js' },
+  { file: 'threads-auto-reveal-spoiler.user.js', entry: 'queueScan', test: 'tests/threads-auto-reveal-spoiler.test.js' },
   { file: 'gemini-fixed-mode.user.js', entry: 'switchToMode', test: 'tests/gemini-fixed-mode.test.js' },
-  { file: 'force-fonts-applegothic.user.js', entry: 'processElement', test: 'tests/force-fonts-applegothic.test.js' },
+  { file: 'force-fonts-applegothic.user.js', entry: 'init', test: 'tests/force-fonts-applegothic.test.js' },
 ];
 
 const TYPED_SCRIPT_FILES = SCRIPT_INDEX.map(script => script.file);
@@ -122,13 +122,11 @@ test('Given README 維護索引，When 查找每支腳本，Then 同列列出來
   }
 });
 
-test('Given Gemini 與 Threads metadata，When 顯示功能摘要，Then 涵蓋實際支援模式與影片', () => {
+test('Given Gemini 與 Threads metadata，When 顯示功能摘要，Then 涵蓋三模型、思考開關與影片', () => {
   const gemini = parseMetadata(readUserScript('gemini-fixed-mode.user.js'));
   const threads = parseMetadata(readUserScript('threads-auto-reveal-spoiler.user.js'));
 
-  assert.match(gemini.description, /Pro/);
-  assert.match(gemini.description, /Fast/);
-  assert.match(gemini.description, /Thinking/);
+  assert.match(gemini.description, /Flash-Lite.*Flash.*Pro.*延伸思考/);
   assert.match(threads.description, /影片/);
 });
 
