@@ -426,6 +426,15 @@ test('Given 一般網站的功能性短參數，When 清理 URL，Then 只移除
   );
 });
 
+test('Given Instagram 與其他網站都含 igsi，When 清理 URL，Then 只移除 Instagram 分享追蹤參數', () => {
+  const instagram = createUrlEnvironment(
+    'https://www.instagram.com/p/DcNVSvfAfiV/?igsi=NTc4MTIwNjQ2YQ%3D%3D',
+  );
+  const otherSite = createUrlEnvironment('https://example.com/search?igsi=functional&keep=yes');
+  assert.equal(instagram.href(), 'https://www.instagram.com/p/DcNVSvfAfiV/');
+  assert.equal(otherSite.href(), 'https://example.com/search?igsi=functional&keep=yes');
+});
+
 test('Given Amazon 與淘寶追蹤參數，When 在對應站點清理，Then 站點參數被移除且商品狀態保留', () => {
   const amazon = createUrlEnvironment(
     'https://www.amazon.co.jp/dp/B0H17FSSHV?ufe=layout&tag=affiliate&psc=1&item=kept',
