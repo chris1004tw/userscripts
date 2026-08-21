@@ -33,7 +33,7 @@
 
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
 | :--- | :--- | :---: | :--- |
-| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留圖示與程式碼原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.8 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
+| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留圖示與程式碼原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.9 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
 
 <!--
 ## 維護索引
@@ -46,7 +46,7 @@
 | `bypass-medium-paywall.user.js` | `isServiceUrl()` 服務站辨識；`redirect()` 跳轉 | `tests/bypass-medium-paywall.test.js` |
 | `threads-auto-reveal-spoiler.user.js` | metadata `@noframes` 與 runtime 防線限制頂層執行；`queueScan()` 以同一套分幀 traversal 掃描初始與動態內容；`queueScanContinuation()` 僅續接目前 active root；`isSpoilerLabel()` 以短標籤快速路徑支援六種文案；`clickIfNeeded()` 隔離單一按鈕點擊失敗 | `tests/threads-auto-reveal-spoiler.test.js` |
 | `gemini-fixed-mode.user.js` | metadata `@noframes` 與 runtime 防線排除 `/_/bscframe` 重複實例；`findModeOption()`／`switchToMode()` 固定三模型；`waitForThinkingOption()`／`syncExtendedThinking()` 獨立同步延伸思考且缺少選項即失敗；`attemptAutoSwitch()` 維持同輪單次同步與三次重試；`updateMainMenuLabel()`／`updateThinkingMenuLabel()` 沿用首次回傳 ID 原地更新兩列 | `tests/gemini-fixed-mode.test.js` |
-| `force-fonts-applegothic.user.js` | `buildStyles()` 建立一般字體、Icon 排除、GitHub 程式碼語意 selector、首頁 utility 邊界與 exact textarea 特異性；`createClassTokenSelector()`／`createClassPrefixSelectors()` 搭配 `-icon` 邊界排除常見 Icon class；`registerMenuCommands()` 管理網站黑名單；`init()` 只注入 CSS，不掃描 DOM 或攔截 Canvas | `tests/force-fonts-applegothic.test.js` |
+| `force-fonts-applegothic.user.js` | `buildStyles()` 建立一般字體、Icon 排除、GitHub 程式碼語意 selector、首頁 utility 邊界與 exact textarea 特異性；`createClassTokenSelector()`／`createClassPrefixSelectors()` 搭配完整 `google-symbols` token 與 `-icon` 邊界排除 Google Maps 等常見 Icon class；`registerMenuCommands()` 管理網站黑名單；`init()` 只注入 CSS，不掃描 DOM 或攔截 Canvas | `tests/force-fonts-applegothic.test.js` |
 | `README.md`／metadata | 版本、反向連結與 JSDoc 一致性 | `tests/documentation-consistency.test.js` |
 -->
 
