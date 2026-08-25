@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         社群媒體影片音量鎖定
 // @namespace    https://chris.taipei
-// @version      0.1.4
+// @version      0.1.5
 // @description  為 Facebook、Instagram、Threads、X 影片設定播放初始音量，並保留平台內建音量滑桿
 // @author       chris1004tw
 // @match        https://*.facebook.com/*
@@ -72,6 +72,8 @@
   // ═══════════════════════════════════════════
 
   var browserWindow = window;
+  var pageHostname = browserWindow.location.hostname;
+  var isXSite = pageHostname === 'x.com' || pageHostname.endsWith('.x.com');
   var volDesc = Object.getOwnPropertyDescriptor(browserWindow.HTMLMediaElement.prototype, 'volume');
   var mutDesc = Object.getOwnPropertyDescriptor(browserWindow.HTMLMediaElement.prototype, 'muted');
   if (!volDesc || !mutDesc) return;
@@ -84,6 +86,8 @@
   var MAX_CORRECTION_BATCHES_PER_BURST = 2;
   /** @type {WeakMap<HTMLVideoElement, {lastEventAt: number, correctionBatches: number}>} */
   var volumeChangeCorrectionStates = new WeakMap();
+  /** @type {WeakSet<HTMLVideoElement>} 目前媒體來源已嘗試解除靜音的影片。 */
+  var xUnmuteAttemptedVideos = new WeakSet();
 
   /**
    * 判斷指定節點是否為頁面環境中的影片元素。
@@ -99,8 +103,9 @@
    * 以原生 descriptor 將目前快取設定套用到指定影片。
    *
    * 設計意圖：不覆寫頁面 prototype，避免 Firefox／Tampermonkey 跨 context setter
-   * 中斷平台播放流程。使用者選擇未靜音時，暫停中的影片可保留平台為 autoplay
-   * 設定的暫時靜音，直到 playing 事件再恢復。
+   * 中斷平台播放流程。X 對每個媒體來源只在第一次 playing 解除一次靜音，並在
+   * setter 前記錄已嘗試狀態，避免 Player 重入 playing 時重複改寫；loadedmetadata
+   * 才重設該影片額度。其他平台則在每次影片開始播放後恢復持久未靜音設定。
    *
    * @param {HTMLVideoElement} video 要更新的影片元素。
    * @param {boolean} [forceMuted=false] 是否不考慮播放狀態、立即套用靜音設定。
@@ -114,7 +119,8 @@
       changed = true;
     }
 
-    var shouldApplyMuted = forceMuted === true || cachedMuted || video.paused === false;
+    var shouldApplyMuted = cachedMuted ||
+      (!isXSite && (forceMuted === true || video.paused === false));
     if (shouldApplyMuted && mutDesc.get.call(video) !== cachedMuted) {
       mutDesc.set.call(video, cachedMuted);
       changed = true;
@@ -161,18 +167,32 @@
   }
 
   /**
-   * 在影片開始播放時套用預設設定；volumechange 衝突時僅有限次恢復，
-   * 之後放行平台內建滑桿的目前影片調整，並保留播放前的 autoplay 暫時靜音。
+   * 在影片開始播放時套用預設設定；X 對每個媒體來源只在首次 playing 解除靜音，
+   * volumechange 衝突則有限次恢復，之後放行平台滑桿調整。
    *
-   * @param {Event} event playing 或 volumechange 媒體事件。
-   * @returns {void} 無回傳值；副作用是依影片播放狀態恢復音量與靜音。
+   * @param {Event} event playing、loadedmetadata 或 volumechange 媒體事件。
+   * @returns {void} 無回傳值；副作用是依影片播放與來源狀態恢復音量或靜音。
    */
   function handleMediaStateChange(event) {
     if (!isVideoElement(event.target)) return;
 
+    if (event.type === 'loadedmetadata') {
+      xUnmuteAttemptedVideos.delete(event.target);
+      return;
+    }
+
     if (event.type === 'playing') {
+      if (isXSite) {
+        if (xUnmuteAttemptedVideos.has(event.target)) return;
+        // 守衛必須早於所有 setter 與額度重設，避免 X 回寫後重入 playing。
+        xUnmuteAttemptedVideos.add(event.target);
+      }
+
       volumeChangeCorrectionStates.delete(event.target);
       applySettingsToVideo(event.target, true);
+      if (isXSite && !cachedMuted && mutDesc.get.call(event.target) !== false) {
+        mutDesc.set.call(event.target, false);
+      }
       return;
     }
 
@@ -189,6 +209,7 @@
   // 媒體事件不保證冒泡，因此用 userscript document 的 capture 統一監聽動態影片。
   // 所有 DOM API 保持在同一個 userscript realm，避免 Firefox 跨 context 權限例外。
   document.addEventListener('playing', handleMediaStateChange, true);
+  document.addEventListener('loadedmetadata', handleMediaStateChange, true);
   document.addEventListener('volumechange', handleMediaStateChange, true);
 
   // ═══════════════════════════════════════════
@@ -401,6 +422,7 @@
     queuedVideoScanItems.clear();
     document.removeEventListener('playing', handleMediaStateChange, true);
     document.removeEventListener('volumechange', handleMediaStateChange, true);
+    document.removeEventListener('loadedmetadata', handleMediaStateChange, true);
     browserWindow.removeEventListener('pagehide', cleanupVideoScanning);
   }
 

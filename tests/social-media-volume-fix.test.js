@@ -17,9 +17,11 @@ const SCRIPT_FILE = 'social-media-volume-fix.user.js';
  *   denyUnsafeDocumentEvents?: boolean,
  *   denyUnsafeObserverOptions?: boolean,
  *   isIframe?: boolean,
+ *   hostname?: string,
  *   simulateMediaEvents?: boolean,
  *   platformVolume?: number,
- *   platformMuted?: boolean
+ *   platformMuted?: boolean,
+ *   replayPlayingAfterPlatformWrite?: boolean
  * }} [environmentOptions={}] Firefox 權限邊界與媒體事件回授模擬選項。
  * @returns {object} 測試操作介面；建立時會立即執行正式 userscript，副作用侷限於 VM stub。
  */
@@ -285,6 +287,7 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
 
   const pageWindow = {
     document: documentStub,
+    location: { hostname: environmentOptions.hostname ?? 'www.facebook.com' },
     HTMLMediaElement: FakeMediaElement,
     HTMLVideoElement: FakeVideoElement,
     MutationObserver: FakeMutationObserver,
@@ -423,6 +426,9 @@ function createEnvironment(initialSettings = {}, environmentOptions = {}) {
         }
         if (environmentOptions.platformMuted !== undefined) {
           video.muted = environmentOptions.platformMuted;
+        }
+        if (environmentOptions.replayPlayingAfterPlatformWrite) {
+          dispatch(documentListeners, 'playing', { type: 'playing', target: video });
         }
         dispatched += 1;
       }
@@ -682,6 +688,63 @@ test('Firefox 拒絕 unsafeWindow observer 讀取 options 時仍會註冊選單'
   assert.equal(env.menuRegistrations.length, 2);
   assert.equal(env.observers.length, 1);
   assert.equal(env.observers[0].observeCalls.length, 1);
+});
+
+test('X 每個媒體來源只在第一次 playing 解除靜音，重入播放不得再次改寫', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      hostname: 'x.com',
+      simulateMediaEvents: true,
+    },
+  );
+  const firstVideo = new env.FakeVideoElement();
+  firstVideo.nativeVolume = 0.25;
+  firstVideo.nativeMuted = true;
+  firstVideo.paused = false;
+
+  env.dispatchDocument('playing', { target: firstVideo });
+  assert.equal(firstVideo.muted, false, '第一支影片首次播放須解除 autoplay 暫時靜音');
+  env.flushMediaEvents();
+
+  firstVideo.nativeMuted = true;
+  env.dispatchDocument('playing', { target: firstVideo });
+  assert.equal(firstVideo.muted, true, '同一來源重入 playing 不得再次解除');
+
+  const nextVideo = new env.FakeVideoElement();
+  nextVideo.nativeVolume = 0.25;
+  nextVideo.nativeMuted = true;
+  nextVideo.paused = false;
+  env.dispatchDocument('playing', { target: nextVideo });
+  assert.equal(nextVideo.muted, false, '下一支影片首次播放也須解除靜音');
+
+  env.dispatchDocument('loadedmetadata', { target: firstVideo });
+  firstVideo.nativeMuted = true;
+  env.dispatchDocument('playing', { target: firstVideo });
+  assert.equal(firstVideo.muted, false, '同一 DOM 載入新媒體來源後可再解除一次');
+});
+
+test('X 平台回寫後重入 playing 不得重設額度並形成 volumechange 活鎖', () => {
+  const env = createEnvironment(
+    { volume: 50, muted: false },
+    {
+      hostname: 'x.com',
+      simulateMediaEvents: true,
+      platformVolume: 1,
+      platformMuted: true,
+      replayPlayingAfterPlatformWrite: true,
+    },
+  );
+  const video = new env.FakeVideoElement();
+  video.nativeVolume = 1;
+  video.nativeMuted = true;
+  video.paused = false;
+
+  env.dispatchDocument('playing', { target: video });
+  const dispatched = env.flushMediaEvents(20);
+
+  assert.equal(env.pendingMediaEventCount(), 0);
+  assert.ok(dispatched < 20, `X 回寫與重入 playing 必須收斂，實際派送 ${dispatched} 次`);
 });
 
 test('平台可在播放前暫時靜音，playing 後才恢復使用者的未靜音設定', () => {
