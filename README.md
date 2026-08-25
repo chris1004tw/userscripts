@@ -33,7 +33,7 @@
 
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
 | :--- | :--- | :---: | :--- |
-| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留圖示與程式碼原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.9 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
+| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留圖示與程式碼原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.10 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
 
 <!--
 ## 維護索引
