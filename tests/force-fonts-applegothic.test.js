@@ -198,6 +198,16 @@ test('Given Google Translate 使用 material-icons-extended 圖示字體，When 
   assert.ok(css.includes('[class~="material-icons-extended" i]'));
 });
 
+test('Given PVE Ext JS 標題列工具及其偽元素圖示，When 產生排除 selector，Then 整條工具結構保留原始字型', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('[class~="x-tool" i]'));
+  assert.ok(css.includes('[class~="x-tool-tool-el" i]'));
+  assert.ok(css.includes('[class~="x-tool-img" i]'));
+});
+
 test('Given checkbox 與 radio，When 套用全域字體，Then 保留原生控制元件字體', () => {
   const environment = createEnvironment();
   environment.run();
@@ -218,6 +228,6 @@ test('Given CSS 優先架構，When 檢查正式腳本，Then 不再掃描 DOM �
 test('Given 精簡版功能範圍，When 檢查 metadata，Then 明確描述 CSS 與常見 Icon 保護', () => {
   const source = readUserScript(SCRIPT_FILE);
 
-  assert.match(source, /^\/\/ @version\s+0\.4\.10$/m);
+  assert.match(source, /^\/\/ @version\s+0\.4\.11$/m);
   assert.match(source, /^\/\/ @description\s+使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體$/m);
 });

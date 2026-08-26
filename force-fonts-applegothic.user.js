@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.10
+// @version      0.4.11
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -29,7 +29,7 @@
         'google-material-icons', 'google-symbols',
         'material-symbols-outlined', 'material-symbols-rounded', 'material-symbols-sharp',
         'octicon', 'feather', 'ionicon', 'themify', 'anticon', 'boxicon',
-        'global-iconfont', 'woo-font'
+        'global-iconfont', 'woo-font', 'x-tool', 'x-tool-tool-el', 'x-tool-img'
     ]);
     const ICON_CLASS_PREFIXES = Object.freeze([
         'fa-', 'fas-', 'far-', 'fal-', 'fad-', 'fab-', 'bi-', 'ri-', 'mdi-', 'mi-',
