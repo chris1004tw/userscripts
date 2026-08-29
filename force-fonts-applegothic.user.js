@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.11
+// @version      0.4.12
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -37,10 +37,13 @@
         'ci-', 'bx-', 'bxs-', 'bxl-'
     ]);
 
+    // 天貓以自訂字型把隨機漢字碼位映射為價格數字；必須保留其原始 font-family 才能正確解碼。
+    const PRESERVED_FONT_CLASS_TOKENS = Object.freeze(['c-price']);
+
     /**
-     * 將 Icon class token 轉為不分大小寫的完整 class CSS selector。
+     * 將需保留頁面原始字型的完整 class token 轉為不分大小寫的 CSS selector。
      *
-     * @param {string} token 要排除的完整 class token。
+     * @param {string} token 要排除全域字型覆寫的完整 class token。
      * @returns {string} 使用 `~=` 比對單一 class token 的 selector；不會產生副作用。
      */
     function createClassTokenSelector(token) {
@@ -68,12 +71,16 @@
         ...ICON_CLASS_TOKENS.map(createClassTokenSelector),
         ...ICON_CLASS_PREFIXES.flatMap(createClassPrefixSelectors)
     ]);
-    const ICON_NOT_SELECTOR = `:not(${ICON_SELECTORS.join(', ')})`;
+    const PRESERVED_FONT_SELECTORS = Object.freeze([
+        ...ICON_SELECTORS,
+        ...PRESERVED_FONT_CLASS_TOKENS.map(createClassTokenSelector)
+    ]);
+    const PRESERVED_FONT_NOT_SELECTOR = `:not(${PRESERVED_FONT_SELECTORS.join(', ')})`;
     const NATIVE_CONTROL_NOT_SELECTOR = ':not(input[type="checkbox"]):not(input[type="radio"])';
-    const TEXT_SELECTOR = `:where(html body *${ICON_NOT_SELECTOR}${NATIVE_CONTROL_NOT_SELECTOR})`;
+    const TEXT_SELECTOR = `:where(html body *${PRESERVED_FONT_NOT_SELECTOR}${NATIVE_CONTROL_NOT_SELECTOR})`;
 
     /**
-     * 建立一般文字、程式碼與常見 Icon 排除規則。
+     * 建立一般文字、程式碼及需保留頁面原始字型的排除規則。
      *
      * @returns {string} 可直接交給 GM_addStyle 的完整 CSS；不讀取或修改 DOM。
      */
