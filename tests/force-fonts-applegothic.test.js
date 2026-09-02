@@ -174,6 +174,15 @@ test('Given 淘寶 site-nav-icon 與常見 Icon class，When 產生排除 select
   assert.doesNotMatch(css, /aria-hidden|role="img"/);
 });
 
+test('Given 元素直接指定 Anthropicons 圖示字型，When 產生排除 selector，Then 保留頁面原始字型', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('[style*="Anthropicons-Variable" i]'));
+  assert.doesNotMatch(css, /\[style\*="Anthropicons" i\]/);
+});
+
 test('Given 天貓價格以自訂字型解碼，When 產生排除 selector，Then 保留 c-price 原始字型', () => {
   const environment = createEnvironment();
   environment.run();
@@ -216,6 +225,15 @@ test('Given PVE Ext JS 標題列工具及其偽元素圖示，When 產生排除 
   assert.ok(css.includes('[class~="x-tool-img" i]'));
 });
 
+test('Given Agoda 以 ficon 與 PUA 偽元素顯示圖示，When 產生排除 selector，Then 保留 icons 字型', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('[class~="ficon" i]'));
+  assert.doesNotMatch(css, /\[class\*="ficon" i\]/);
+});
+
 test('Given checkbox 與 radio，When 套用全域字體，Then 保留原生控制元件字體', () => {
   const environment = createEnvironment();
   environment.run();
@@ -236,6 +254,6 @@ test('Given CSS 優先架構，When 檢查正式腳本，Then 不再掃描 DOM �
 test('Given 精簡版功能範圍，When 檢查 metadata，Then 明確描述 CSS 與常見 Icon 保護', () => {
   const source = readUserScript(SCRIPT_FILE);
 
-  assert.match(source, /^\/\/ @version\s+0\.4\.12$/m);
+  assert.match(source, /^\/\/ @version\s+0\.4\.13$/m);
   assert.match(source, /^\/\/ @description\s+使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體$/m);
 });
