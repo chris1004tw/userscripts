@@ -20,6 +20,7 @@
 | 移除 URL 追蹤 | 自動移除網址中的追蹤參數，讓分享連結更乾淨。會保留商品選項、搜尋條件等網站正常運作需要的參數，並清除 Instagram `igsi` 與 Bilibili `trackid` 追蹤標記；其他清理規則也會定期更新。 | 0.4.10 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js) |
 | 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製目前網址。X/Twitter 會轉成 fxTwitter 連結，Amazon.co.jp、PChome 24h 與蝦皮商品頁則會轉成較短、方便分享的網址；Threads 保留原始網址。 | 0.4.6 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
 | 社群媒體影片音量鎖定 | 為 Facebook、Instagram、Threads、X 的影片設定預設音量與靜音狀態。可從 Tampermonkey 選單調整；目前影片仍可使用網站本身的音量滑桿，切換影片後會恢復預設音量。 | 0.1.5 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js) |
+| Facebook&nbsp;自動最高畫質 | 播放影片時在背景選擇最高解析度，不顯示自動操作的選單，手動設定照常使用；支援中英文選單。不提供畫質選單的播放器維持原設定，最高畫質可能增加流量與緩衝時間。 | 0.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/facebook-highest-quality.user.js) |
 | Medium&nbsp;付費牆繞過 | 開啟 Medium 文章時，自動跳轉至第三方閱讀服務。可從 Tampermonkey 選單選擇 Freedium、Archive.today 或 ReadMedium，也能關閉自動跳轉。 | 0.1.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/bypass-medium-paywall.user.js) |
 | Threads&nbsp;自動點擊&nbsp;Spoiler | 自動展開 Threads 中被 Spoiler 隱藏的文字、圖片與影片。支援「Spoiler」、「劇透」、「剧透」、「爆雷」、「스포일러」與「ネタバレ」標籤。 | 0.1.2 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/threads-auto-reveal-spoiler.user.js) |
 
@@ -47,6 +48,7 @@
 | `threads-auto-reveal-spoiler.user.js` | metadata `@noframes` 與 runtime 防線限制頂層執行；`queueScan()` 以同一套分幀 traversal 掃描初始與動態內容；`queueScanContinuation()` 僅續接目前 active root；`isSpoilerLabel()` 以短標籤快速路徑支援六種文案；`clickIfNeeded()` 隔離單一按鈕點擊失敗 | `tests/threads-auto-reveal-spoiler.test.js` |
 | `gemini-fixed-mode.user.js` | metadata `@noframes` 與 runtime 防線排除 `/_/bscframe` 重複實例；`findModeOption()`／`switchToMode()` 固定三模型；`waitForThinkingOption()`／`syncExtendedThinking()` 獨立同步延伸思考且缺少選項即失敗；`attemptAutoSwitch()` 維持同輪單次同步與三次重試；`updateMainMenuLabel()`／`updateThinkingMenuLabel()` 沿用首次回傳 ID 原地更新兩列 | `tests/gemini-fixed-mode.test.js` |
 | `force-fonts-applegothic.user.js` | `buildStyles()` 建立一般字體、天貓 `.c-price` 自訂價格字型排除、Agoda `ficon` 與常見 Icon 排除、GitHub 程式碼語意 selector、首頁 utility 邊界與 exact textarea 特異性；`ICON_SELECTORS` 精確保留 inline `Anthropicons-Variable`；`createClassTokenSelector()`／`createClassPrefixSelectors()` 搭配完整 `ficon`、`google-symbols`、PVE Ext JS `x-tool` 結構 token 與 `-icon` 邊界，保留 Agoda、天貓價格、Google Maps 與 PVE 標題列偽元素等頁面原始字型；`registerMenuCommands()` 管理網站黑名單；`init()` 只注入 CSS，不掃描 DOM 或攔截 Canvas | `tests/force-fonts-applegothic.test.js` |
+| `facebook-highest-quality.user.js` | `handlePlaying()` 處理新影片；`selectHighestQuality()` 選擇最高解析度；`hideAutomaticMenus()`／`restoreMenus()` 管理背景選單 | `tests/facebook-highest-quality.test.js` |
 | `README.md`／metadata | 版本、反向連結與 JSDoc 一致性 | `tests/documentation-consistency.test.js` |
 -->
 
