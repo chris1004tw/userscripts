@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.13
+// @version      0.4.14
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -26,6 +26,7 @@
     // 完整 class token 僅涵蓋具有明確 Icon 語意的常見名稱，避免把 iconic 等一般文字 class 誤排除。
     const ICON_CLASS_TOKENS = Object.freeze([
         'icon', 'ficon', 'iconfont', 'icomoon', 'fontawesome', 'material-icons', 'material-icons-extended',
+        'material-icons-outlined', 'glyphicon', 'ottd',
         'google-material-icons', 'google-symbols',
         'material-symbols-outlined', 'material-symbols-rounded', 'material-symbols-sharp',
         'octicon', 'feather', 'ionicon', 'themify', 'anticon', 'boxicon',
@@ -34,7 +35,7 @@
     const ICON_CLASS_PREFIXES = Object.freeze([
         'fa-', 'fas-', 'far-', 'fal-', 'fad-', 'fab-', 'bi-', 'ri-', 'mdi-', 'mi-',
         'oi-', 'ti-', 'si-', 'gi-', 'ai-', 'di-', 'fi-', 'hi-', 'pi-', 'vi-', 'wi-',
-        'ci-', 'bx-', 'bxs-', 'bxl-'
+        'ci-', 'bx-', 'bxs-', 'bxl-', 'pe-7s-'
     ]);
 
     // 天貓以自訂字型把隨機漢字碼位映射為價格數字；必須保留其原始 font-family 才能正確解碼。
@@ -73,6 +74,9 @@
         ...ICON_CLASS_PREFIXES.flatMap(createClassPrefixSelectors)
     ]);
     const PRESERVED_FONT_SELECTORS = Object.freeze([
+        // xterm 的繪製與字格量測必須使用同一字型；保留整棵子樹，不另指定等寬字型。
+        '.xterm',
+        '.xterm *',
         ...ICON_SELECTORS,
         ...PRESERVED_FONT_CLASS_TOKENS.map(createClassTokenSelector)
     ]);

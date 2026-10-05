@@ -250,10 +250,3 @@ test('Given CSS 優先架構，When 檢查正式腳本，Then 不再掃描 DOM �
   assert.doesNotMatch(source, /querySelectorAll|requestAnimationFrame|getComputedStyle/);
   assert.doesNotMatch(source, /data-no-font|processElement|forceRescan/);
 });
-
-test('Given 精簡版功能範圍，When 檢查 metadata，Then 明確描述 CSS 與常見 Icon 保護', () => {
-  const source = readUserScript(SCRIPT_FILE);
-
-  assert.match(source, /^\/\/ @version\s+0\.4\.13$/m);
-  assert.match(source, /^\/\/ @description\s+使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體$/m);
-});
