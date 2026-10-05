@@ -18,6 +18,7 @@ const SCRIPT_INDEX = [
   { file: 'threads-auto-reveal-spoiler.user.js', entry: 'queueScan', test: 'tests/threads-auto-reveal-spoiler.test.js' },
   { file: 'gemini-fixed-mode.user.js', entry: 'switchToMode', test: 'tests/gemini-fixed-mode.test.js' },
   { file: 'force-fonts-applegothic.user.js', entry: 'init', test: 'tests/force-fonts-applegothic.test.js' },
+  { file: 'ncc-captcha-solver.user.js', entry: 'solveCaptcha', test: 'tests/ncc-captcha-solver.test.js' },
   { file: 'pve-hide-subscription.user.js', entry: 'dismissSubscriptionNotice', test: 'tests/pve-hide-subscription.test.js' },
   { file: 'facebook-highest-quality.user.js', entry: 'selectHighestQuality', test: 'tests/facebook-highest-quality.test.js' },
 ];

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "sampleCount": 25,
+  "characterCount": 125,
+  "split": {
+    "trainingCaptchaIndexes": "1-20",
+    "holdoutCaptchaIndexes": "21-25"
+  },
+  "mnist12Baseline": {
+    "overallCharacterAccuracy": 0.744,
+    "overallCaptchaAccuracy": 0.32,
+    "holdoutCharacterAccuracy": 0.72,
+    "holdoutCaptchaAccuracy": 0.2
+  },
+  "hogLinearSvm": {
+    "selected": {
+      "cellSize": 4,
+      "c": 0.1,
+      "trainingCrossValidationCharacterAccuracy": 0.79
+    },
+    "holdoutCharacterAccuracy": 0.8,
+    "holdoutCaptchaAccuracy": 0.2,
+    "decision": "discarded: holdout full-CAPTCHA accuracy did not improve"
+  },
+  "smallCnnRealMasksOnly": {
+    "seed": 20260830,
+    "parameters": 26698,
+    "holdoutCharacterAccuracy": 0.8,
+    "holdoutCaptchaAccuracy": 0.4,
+    "decision": "research only: improvement is too small for production"
+  },
+  "independentHoldout": {
+    "sampleCount": 25,
+    "characterCount": 125,
+    "captchaIndexes": "26-50",
+    "mnist12Baseline": {
+      "characterAccuracy": 0.8,
+      "captchaAccuracy": 0.28
+    },
+    "smallCnn": {
+      "seed": 20260830,
+      "parameters": 26698,
+      "modelPath": "models/ncc-digit-classifier.onnx",
+      "modelBytes": 108876,
+      "modelSha256": "b7d90ad538a1f49e4392c2c5ce601dc6c7fc11f12a8202008bb8a29a1aa9ab22",
+      "input": "float32[1,1,28,28], grayscale [0,1]",
+      "output": "float32[1,10] logits",
+      "onnxVerified": true,
+      "characterAccuracy": 0.84,
+      "captchaAccuracy": 0.44,
+      "characterAccuracyDelta": 0.04,
+      "captchaAccuracyDelta": 0.16,
+      "decision": "candidate: materially improved independent full-CAPTCHA accuracy"
+    }
+  }
+}
