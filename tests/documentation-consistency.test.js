@@ -18,6 +18,7 @@ const SCRIPT_INDEX = [
   { file: 'threads-auto-reveal-spoiler.user.js', entry: 'queueScan', test: 'tests/threads-auto-reveal-spoiler.test.js' },
   { file: 'gemini-fixed-mode.user.js', entry: 'switchToMode', test: 'tests/gemini-fixed-mode.test.js' },
   { file: 'force-fonts-applegothic.user.js', entry: 'init', test: 'tests/force-fonts-applegothic.test.js' },
+  { file: 'facebook-highest-quality.user.js', entry: 'selectHighestQuality', test: 'tests/facebook-highest-quality.test.js' },
 ];
 
 const TYPED_SCRIPT_FILES = SCRIPT_INDEX.map(script => script.file);
@@ -88,7 +89,7 @@ function findLeadingJsdoc(source, index) {
   return prefix.slice(commentStart);
 }
 
-test('Given README 安裝表格，When 比對 metadata，Then 七支腳本版本完全同步', () => {
+test('Given README 安裝表格，When 比對 metadata，Then 所有腳本版本完全同步', () => {
   const readme = fs.readFileSync(path.join(PROJECT_ROOT, 'README.md'), 'utf8');
 
   for (const script of SCRIPT_INDEX) {
@@ -97,7 +98,7 @@ test('Given README 安裝表格，When 比對 metadata，Then 七支腳本版本
   }
 });
 
-test('Given 七支正式腳本，When 檢查可追溯性，Then 都有 README 反向連結與行為測試', () => {
+test('Given 正式腳本，When 檢查可追溯性，Then 都有 README 反向連結與行為測試', () => {
   for (const script of SCRIPT_INDEX) {
     assert.match(
       readUserScript(script.file),
@@ -130,7 +131,7 @@ test('Given Gemini 與 Threads metadata，When 顯示功能摘要，Then 涵蓋�
   assert.match(threads.description, /影片/);
 });
 
-test('Given 七支正式 userscript，When 掃描具名函式，Then 每個簽章都有相鄰 JSDoc 型別', () => {
+test('Given 正式 userscript，When 掃描具名函式，Then 每個簽章都有相鄰 JSDoc 型別', () => {
   for (const fileName of TYPED_SCRIPT_FILES) {
     const source = readUserScript(fileName);
     const functions = findNamedFunctions(source);
