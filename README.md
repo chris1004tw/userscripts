@@ -33,7 +33,7 @@
 
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
 | :--- | :--- | :---: | :--- |
-| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留 Agoda 與常見圖示、程式碼及天貓價格原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.13 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
+| 替換字體為 AppleGothic | 將網頁的一般文字改為 AppleGothic，同時保留租寓、Agoda、北投麗禧、Trip.com 與常見圖示、程式碼、PVE 終端機及天貓價格原本適合的字體。若特定網站顯示異常，可從 Tampermonkey 選單將該網站加入黑名單。 | 0.4.14 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/force-fonts-applegothic.user.js) |
 
 <!--
 ## 維護索引
