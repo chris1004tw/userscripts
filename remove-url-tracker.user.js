@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.9
+// @version      0.4.10
 // @description  自動移除網址中的追蹤參數，簡化分享連結並保護隱私
 // @author       chris1004tw
 // @match        *://*/*
@@ -125,6 +125,10 @@
             hostnamePattern: /^(?:[a-z0-9-]+\.)*youtube\.com$/i,
             params: new Set(['feature', 'kw', 'pp', 'si']),
             except: [/^https?:\/\/(?:[a-z0-9-]+\.)*?youtube\.com\/redirect/i]
+        },
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*bilibili\.com$/i,
+            params: new Set(['trackid'])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*amazon\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*amazon\.com$/i,

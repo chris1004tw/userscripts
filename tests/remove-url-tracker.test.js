@@ -435,6 +435,26 @@ test('Given Instagram 與其他網站都含 igsi，When 清理 URL，Then 只移
   assert.equal(otherSite.href(), 'https://example.com/search?igsi=functional&keep=yes');
 });
 
+test('Given Bilibili 推薦追蹤網址，When 啟動與 SPA 導航，Then 移除 trackid 並保留分集與播放位置', () => {
+  const env = createUrlEnvironment(
+    'https://www.bilibili.com/video/BV1ekbG6PEus/?trackid=web_pegasus_0.router-web-pegasus-2479516-gfll4.1790183784079.48',
+  );
+  assert.equal(env.href(), 'https://www.bilibili.com/video/BV1ekbG6PEus/');
+  env.pageUrlChange('https://www.bilibili.com/video/BV1ekbG6PEus/?p=2&trackid=next&t=30#reply');
+  assert.equal(env.href(), 'https://www.bilibili.com/video/BV1ekbG6PEus/?p=2&t=30#reply');
+});
+
+test('Given trackid 也可能是功能參數，When 比對 Bilibili 網域邊界，Then 不清除其他網站的 trackid', () => {
+  for (const hostname of ['bilibili.com', 'm.bilibili.com']) {
+    const env = createUrlEnvironment(`https://${hostname}/video/BV1ekbG6PEus/?trackid=feed`);
+    assert.equal(env.href(), `https://${hostname}/video/BV1ekbG6PEus/`);
+  }
+  for (const hostname of ['example.com', 'bilibili.com.example.com', 'notbilibili.com']) {
+    const url = `https://${hostname}/?trackid=42`;
+    assert.equal(createUrlEnvironment(url).href(), url);
+  }
+});
+
 test('Given Amazon 與淘寶追蹤參數，When 在對應站點清理，Then 站點參數被移除且商品狀態保留', () => {
   const amazon = createUrlEnvironment(
     'https://www.amazon.co.jp/dp/B0H17FSSHV?ufe=layout&tag=affiliate&psc=1&item=kept',
