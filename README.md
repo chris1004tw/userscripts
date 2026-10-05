@@ -25,6 +25,12 @@
 | Threads&nbsp;自動點擊&nbsp;Spoiler | 自動展開 Threads 中被 Spoiler 隱藏的文字、圖片與影片。支援「Spoiler」、「劇透」、「剧透」、「爆雷」、「스포일러」與「ネタバレ」標籤。 | 0.1.2 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/threads-auto-reveal-spoiler.user.js) |
 | PVE&nbsp;自動關閉訂閱提示 | 自動涵蓋任意主機的 HTTP／HTTPS `:8006`，確認英文「No valid subscription」提示，保留其他警告與操作確認，不修改訂閱狀態。反向代理使用其他連接埠時，需自行新增該網址的 `@match`。 | 0.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/pve-hide-subscription.user.js) |
 
+## NCC
+
+| 名稱 | 說明 | 版本 | 連&#8288;結 |
+| :--- | :--- | :---: | :--- |
+| NCC&nbsp;驗證碼自動辨識 | 在 NCC 型式認證資料查詢頁面，以 Tesseract.js 7.0.0 在瀏覽器本機辨識五位數字驗證碼；首次使用需下載辨識資源。提供「重新辨識驗證碼」按鈕，可重試同一張圖片；保護手動輸入、不上傳圖片或自動送出查詢。結果不確定時留白，仍需人工核對或輸入。 | 0.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/ncc-captcha-solver.user.js) |
+
 ## Gemini
 
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
@@ -49,6 +55,7 @@
 | `threads-auto-reveal-spoiler.user.js` | metadata `@noframes` 與 runtime 防線限制頂層執行；`queueScan()` 以同一套分幀 traversal 掃描初始與動態內容；`queueScanContinuation()` 僅續接目前 active root；`isSpoilerLabel()` 以短標籤快速路徑支援六種文案；`clickIfNeeded()` 隔離單一按鈕點擊失敗 | `tests/threads-auto-reveal-spoiler.test.js` |
 | `gemini-fixed-mode.user.js` | metadata `@noframes` 與 runtime 防線排除 `/_/bscframe` 重複實例；`findModeOption()`／`switchToMode()` 固定三模型；`waitForThinkingOption()`／`syncExtendedThinking()` 獨立同步延伸思考且缺少選項即失敗；`attemptAutoSwitch()` 維持同輪單次同步與三次重試；`updateMainMenuLabel()`／`updateThinkingMenuLabel()` 沿用首次回傳 ID 原地更新兩列 | `tests/gemini-fixed-mode.test.js` |
 | `force-fonts-applegothic.user.js` | `buildStyles()` 建立一般字體、天貓 `.c-price` 自訂價格字型排除、Agoda `ficon` 與常見 Icon 排除、GitHub 程式碼語意 selector、首頁 utility 邊界與 exact textarea 特異性；`ICON_SELECTORS` 精確保留 inline `Anthropicons-Variable`；`createClassTokenSelector()`／`createClassPrefixSelectors()` 搭配完整 `ficon`、`google-symbols`、PVE Ext JS `x-tool` 結構 token 與 `-icon` 邊界，保留 Agoda、天貓價格、Google Maps 與 PVE 標題列偽元素等頁面原始字型；`registerMenuCommands()` 管理網站黑名單；`init()` 只注入 CSS，不掃描 DOM 或攔截 Canvas | `tests/force-fonts-applegothic.test.js` |
+| `ncc-captcha-solver.user.js` | `solveCaptcha()`／`prepareCaptchaCanvas()` 以 Tesseract.js 7.0.0 在本機 OCR，`queueCaptchaRecognition()`／`processCaptcha()` 串行處理圖片更新、丟棄過期結果並保留辨識期間的手動輸入；`cleanup()` 管理 worker、逾時與頁面生命週期 | `tests/ncc-captcha-solver.test.js` |
 | `pve-hide-subscription.user.js` | `dismissSubscriptionNotice()` 精確確認訂閱提示；`queueDialog()` 處理動態與重用視窗 | `tests/pve-hide-subscription.test.js` |
 | `facebook-highest-quality.user.js` | `handlePlaying()` 處理新影片；`selectHighestQuality()` 選擇最高解析度；`hideAutomaticMenus()`／`restoreMenus()` 管理背景選單 | `tests/facebook-highest-quality.test.js` |
 | `README.md`／metadata | 版本、反向連結與 JSDoc 一致性 | `tests/documentation-consistency.test.js` |
@@ -62,5 +69,6 @@
 - PChome 短網址服務由 [p.pancake.tw](https://p.pancake.tw/) 提供
 - 蝦皮轉換短網址參考自 [gnehs/userscripts](https://github.com/gnehs/userscripts)
 - 社群媒體影片音量鎖定原始版本由 [ttoan12](https://github.com/ttoan12/social-network-video-volume-fix) 開發
+- NCC 驗證碼辨識使用 [Tesseract.js](https://github.com/naptha/tesseract.js) 7.0.0，在瀏覽器本機執行 OCR
 
 程式碼主要由 Claude Opus 4.6 Thinking、GPT-5.6 Sol 協助完成。
