@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.14
+// @version      0.4.15
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -23,10 +23,11 @@
     const TARGET_FONT = 'AppleGothic, AppleGothicSC, "Malgun Gothic", "Apple Monochrome Emoji Ind", "SF Pro Icons", "SF Pro Text", sans-serif';
     const CODE_FONT = '"Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", "JetBrains Mono", AppleGothic, AppleGothicSC, monospace';
 
-    // 完整 class token 僅涵蓋具有明確 Icon 語意的常見名稱，避免把 iconic 等一般文字 class 誤排除。
+    // CSS 無法直接以 computed font-family 判斷圖示字型；保留高召回率的圖示元素與已確認 class token。
+    // Trip.com 飯店頁以 smarticon、ic 與 hotel_desktop_trip- 承載 PUA 偽元素圖示。
     const ICON_CLASS_TOKENS = Object.freeze([
         'icon', 'ficon', 'iconfont', 'icomoon', 'fontawesome', 'material-icons', 'material-icons-extended',
-        'material-icons-outlined', 'glyphicon', 'ottd',
+        'material-icons-outlined', 'glyphicon', 'ottd', 'smarticon', 'ic', 'hotel_desktop_trip-',
         'google-material-icons', 'google-symbols',
         'material-symbols-outlined', 'material-symbols-rounded', 'material-symbols-sharp',
         'octicon', 'feather', 'ionicon', 'themify', 'anticon', 'boxicon',
@@ -62,6 +63,8 @@
     }
 
     const ICON_SELECTORS = Object.freeze([
+        // 多數 Icon Font 使用 <i> 或在該元素的偽元素上繪製；保留整個元素以避免誤套一般字型。
+        'i',
         '[data-icon]',
         'i[style*="font-family" i]',
         '[style*="Anthropicons-Variable" i]',

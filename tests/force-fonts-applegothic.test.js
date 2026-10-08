@@ -158,11 +158,12 @@ test('Given GitHub Code view 的可選取程式碼 textarea，When 產生 CSS，
 });
 
 
-test('Given 淘寶 site-nav-icon 與常見 Icon class，When 產生排除 selector，Then 保留邊界明確的 Icon Font', () => {
+test('Given 淘寶 site-nav-icon 與常見 Icon class，When 產生排除 selector，Then 保留高召回率的 Icon Font', () => {
   const environment = createEnvironment();
   environment.run();
   const css = environment.styles[0];
 
+  assert.ok(css.includes(', i,'));
   assert.ok(css.includes('[class~="icon" i]'));
   assert.ok(css.includes('[class^="fa-" i]'));
   assert.ok(css.includes('[class*=" fa-" i]'));
@@ -170,7 +171,6 @@ test('Given 淘寶 site-nav-icon 與常見 Icon class，When 產生排除 select
   assert.ok(css.includes('[class*="-icon " i]'));
   assert.ok(css.includes('[class*="-icon-" i]'));
   assert.ok(css.includes('[data-icon]'));
-  assert.doesNotMatch(css, /\[class\*="icon" i\]/);
   assert.doesNotMatch(css, /aria-hidden|role="img"/);
 });
 
@@ -233,6 +233,16 @@ test('Given Agoda 以 ficon 與 PUA 偽元素顯示圖示，When 產生排除 se
   assert.ok(css.includes('[class~="ficon" i]'));
   assert.doesNotMatch(css, /\[class\*="ficon" i\]/);
 });
+test('Given Trip.com 飯店頁面的 smarticon、ic 與 hotel_desktop_trip- 圖示，When 產生排除 selector，Then 保留 Trip icon font', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('[class~="smarticon" i]'));
+  assert.ok(css.includes('[class~="ic" i]'));
+  assert.ok(css.includes('[class~="hotel_desktop_trip-" i]'));
+});
+
 
 test('Given checkbox 與 radio，When 套用全域字體，Then 保留原生控制元件字體', () => {
   const environment = createEnvironment();
