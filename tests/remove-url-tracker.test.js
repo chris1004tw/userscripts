@@ -435,6 +435,13 @@ test('Given Instagram 與其他網站都含 igsi，When 清理 URL，Then 只移
   assert.equal(otherSite.href(), 'https://example.com/search?igsi=functional&keep=yes');
 });
 
+test('Given Instagram 分享網址含 psln，When 清理 URL，Then 移除 psln 並保留其他查詢參數', () => {
+  const instagram = createUrlEnvironment(
+    'https://www.instagram.com/p/DelwWs7AXUC/?psln=NTc4MTIwNjQ2YQ%3D%3D&comment_id=123',
+  );
+  assert.equal(instagram.href(), 'https://www.instagram.com/p/DelwWs7AXUC/?comment_id=123');
+});
+
 test('Given Bilibili 推薦追蹤網址，When 啟動與 SPA 導航，Then 移除 trackid 並保留分集與播放位置', () => {
   const env = createUrlEnvironment(
     'https://www.bilibili.com/video/BV1ekbG6PEus/?trackid=web_pegasus_0.router-web-pegasus-2479516-gfll4.1790183784079.48',
