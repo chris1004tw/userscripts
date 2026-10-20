@@ -183,12 +183,13 @@ test('Given 元素直接指定 Anthropicons 圖示字型，When 產生排除 sel
   assert.doesNotMatch(css, /\[style\*="Anthropicons" i\]/);
 });
 
-test('Given 天貓價格以自訂字型解碼，When 產生排除 selector，Then 保留 c-price 原始字型', () => {
+test('Given 天貓價格以自訂字型解碼，When 產生排除 selector，Then 保留 c-price 容器及其子元素原始字型', () => {
   const environment = createEnvironment();
   environment.run();
   const css = environment.styles[0];
 
   assert.ok(css.includes('[class~="c-price" i]'));
+  assert.ok(css.includes('[class~="c-price" i] *'));
 });
 
 test('Given Google Maps 使用 google-symbols 圖示字體，When 產生排除 selector，Then 保留 Google Symbols 字體', () => {

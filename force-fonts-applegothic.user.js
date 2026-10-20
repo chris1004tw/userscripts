@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.15
+// @version      0.4.16
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -81,7 +81,9 @@
         '.xterm',
         '.xterm *',
         ...ICON_SELECTORS,
-        ...PRESERVED_FONT_CLASS_TOKENS.map(createClassTokenSelector)
+        ...PRESERVED_FONT_CLASS_TOKENS.map(createClassTokenSelector),
+        // 天貓價格的自訂字型常掛在容器上；其子元素也必須沿用原始字型。
+        ...PRESERVED_FONT_CLASS_TOKENS.map(token => `${createClassTokenSelector(token)} *`)
     ]);
     const PRESERVED_FONT_NOT_SELECTOR = `:not(${PRESERVED_FONT_SELECTORS.join(', ')})`;
     const NATIVE_CONTROL_NOT_SELECTOR = ':not(input[type="checkbox"]):not(input[type="radio"])';
