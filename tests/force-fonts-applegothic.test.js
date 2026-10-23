@@ -171,7 +171,14 @@ test('Given 淘寶 site-nav-icon 與常見 Icon class，When 產生排除 select
   assert.ok(css.includes('[class*="-icon " i]'));
   assert.ok(css.includes('[class*="-icon-" i]'));
   assert.ok(css.includes('[data-icon]'));
-  assert.doesNotMatch(css, /aria-hidden|role="img"/);
+});
+
+test('Given Claude 等 SVG 圖示含文字節點，When 產生排除 selector，Then 保留 SVG 子樹原始字型', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('svg, svg *'));
 });
 
 test('Given 元素直接指定 Anthropicons 圖示字型，When 產生排除 selector，Then 保留頁面原始字型', () => {
@@ -182,6 +189,15 @@ test('Given 元素直接指定 Anthropicons 圖示字型，When 產生排除 sel
   assert.ok(css.includes('[style*="Anthropicons-Variable" i]'));
   assert.doesNotMatch(css, /\[style\*="Anthropicons" i\]/);
 });
+test('Given Claude 使用 data-cds Icon 元素承載 Anthropicons 字型，When 產生排除 selector，Then 保留圖示原始字型', () => {
+  const environment = createEnvironment();
+  environment.run();
+  const css = environment.styles[0];
+
+  assert.ok(css.includes('[data-cds="Icon"]'));
+  assert.doesNotMatch(css, /\[data-cds\*="Icon"/);
+});
+
 
 test('Given 天貓價格以自訂字型解碼，When 產生排除 selector，Then 保留 c-price 容器及其子元素原始字型', () => {
   const environment = createEnvironment();

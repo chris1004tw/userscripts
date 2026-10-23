@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         替換字體為 AppleGothic
 // @namespace    https://chris.taipei
-// @version      0.4.16
+// @version      0.4.17
 // @description  使用 CSS 將一般頁面字體改為 AppleGothic，並保留常見 Icon Font 與程式碼字體
 // @author       chris1004tw
 // @match        *://*/*
@@ -29,6 +29,7 @@
         'icon', 'ficon', 'iconfont', 'icomoon', 'fontawesome', 'material-icons', 'material-icons-extended',
         'material-icons-outlined', 'glyphicon', 'ottd', 'smarticon', 'ic', 'hotel_desktop_trip-',
         'google-material-icons', 'google-symbols',
+        'devsite-nav-toggle',
         'material-symbols-outlined', 'material-symbols-rounded', 'material-symbols-sharp',
         'octicon', 'feather', 'ionicon', 'themify', 'anticon', 'boxicon',
         'global-iconfont', 'woo-font', 'x-tool', 'x-tool-tool-el', 'x-tool-img'
@@ -66,8 +67,14 @@
         // 多數 Icon Font 使用 <i> 或在該元素的偽元素上繪製；保留整個元素以避免誤套一般字型。
         'i',
         '[data-icon]',
+        // Claude 的 Anthropicons glyph 使用 data-cds="Icon"，不是 inline font-family。
+        '[data-cds="Icon"]',
         'i[style*="font-family" i]',
         '[style*="Anthropicons-Variable" i]',
+        // Google Workspace 說明中心的篩選器清除圖示沒有 material-icons class。
+        '.devsite-book-nav-filter .filter-clear-button',
+        // Gemini 搜尋元件內的裝飾圖示；不依賴生成 class 或介面語言。
+        '[data-search_modal-island-root] button[aria-haspopup="dialog"] > span[aria-hidden="true"]',
         '[class^="icon-" i]',
         '[class*=" icon-" i]',
         '[class$="-icon" i]',
@@ -77,6 +84,9 @@
         ...ICON_CLASS_PREFIXES.flatMap(createClassPrefixSelectors)
     ]);
     const PRESERVED_FONT_SELECTORS = Object.freeze([
+        // SVG 圖示可能以文字節點搭配頁面原始字型繪製；保留整棵圖形子樹。
+        'svg',
+        'svg *',
         // xterm 的繪製與字格量測必須使用同一字型；保留整棵子樹，不另指定等寬字型。
         '.xterm',
         '.xterm *',
