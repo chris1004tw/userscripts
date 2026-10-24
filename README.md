@@ -17,7 +17,7 @@
 
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
 | :--- | :--- | :---: | :--- |
-| 移除 URL 追蹤 | 自動移除網址中的追蹤參數，讓分享連結更乾淨。會保留商品選項、搜尋條件等網站正常運作需要的參數，並清除 Instagram `igsi`／`psln` 與 Bilibili `trackid` 追蹤標記；其他清理規則也會定期更新。 | 0.4.11 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js) |
+| 移除 URL 追蹤 | 自動移除網址中的追蹤參數，讓分享連結更乾淨。會保留商品選項、搜尋條件等網站正常運作需要的參數，並清除 Instagram `igsi`／`psln` 與 Bilibili `trackid` 追蹤標記；其他清理規則也會定期更新。 | 0.4.12 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js) |
 | 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製目前網址。X/Twitter 會轉成 fxTwitter 連結，Amazon.co.jp、PChome 24h 與蝦皮商品頁則會轉成較短、方便分享的網址；Threads 保留原始網址。 | 0.4.6 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
 | 社群媒體影片音量鎖定 | 為 Facebook、Instagram、Threads、X 的影片設定預設音量與靜音狀態。可從 Tampermonkey 選單調整；目前影片仍可使用網站本身的音量滑桿，切換影片後會恢復預設音量。 | 0.1.5 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js) |
 | Facebook&nbsp;自動最高畫質 | 播放影片時在背景選擇最高解析度，不顯示自動操作的選單，手動設定照常使用；支援中英文選單。不提供畫質選單的播放器維持原設定，最高畫質可能增加流量與緩衝時間。 | 0.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/facebook-highest-quality.user.js) |
