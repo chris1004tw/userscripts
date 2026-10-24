@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.11
+// @version      0.4.12
 // @description  自動移除網址中的追蹤參數，簡化分享連結並保護隱私
 // @author       chris1004tw
 // @match        *://*/*
@@ -116,6 +116,10 @@
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*instagram\.com$/i,
             params: new Set(['igsi', 'psln'])
+        },
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*indiegogo\.com$/i,
+            params: new Set(['gfmct'])
         },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*(?:twitter\.com|x\.com)$/i,

@@ -174,6 +174,20 @@ function createUrlEnvironment(initialHref, options = {}) {
   };
 }
 
+test('Given Indiegogo gfmct，When 清理網址，Then 本地移除並保留功能參數與網域邊界', () => {
+  const base = 'https://www.indiegogo.com/en/projects/rfidresearchgroup/proxmark5/updates/17';
+  const env = createUrlEnvironment(`${base}?gfmct=8QgWrBnOhEg3_gWsHR7rso7kSbDKJPneecI1u3wkO8heL2Oysl`, { allowRequests: true });
+  assert.equal(env.href(), base);
+  assert.deepEqual(env.requestedSources(), []);
+  env.pageUrlChange(`${base}?page=2&gfmct=one&q=a%20b&gfmct=two&q=c%2Fd#comments`);
+  assert.equal(env.href(), `${base}?page=2&q=a%20b&q=c%2Fd#comments`);
+  assert.equal(createUrlEnvironment('https://indiegogo.com/?gfmct=one').href(), 'https://indiegogo.com/');
+  for (const host of ['example.com', 'notindiegogo.com', 'indiegogo.com.example.com']) {
+    const url = `https://${host}/?gfmct=keep`;
+    assert.equal(createUrlEnvironment(url).href(), url);
+  }
+});
+
 test('Given userscript metadata，When Tampermonkey 判斷注入與來源權限，Then 禁止子 frame 並只連線三個 JSON 來源', () => {
   const source = readUserScript('remove-url-tracker.user.js');
   assert.match(source, /^\/\/ @noframes\s*$/m);
