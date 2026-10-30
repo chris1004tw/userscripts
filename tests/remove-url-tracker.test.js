@@ -456,6 +456,18 @@ test('Given Instagram 分享網址含 psln，When 清理 URL，Then 移除 psln 
   assert.equal(instagram.href(), 'https://www.instagram.com/p/DelwWs7AXUC/?comment_id=123');
 });
 
+test('Given Instagram exln 分享參數，When 啟動與 SPA 導航，Then 清除追蹤並保留原始功能參數', () => {
+  const env = createUrlEnvironment('https://www.instagram.com/p/DfHlBCCk8pK/?exln=NTc4MTIwNjQ2YQ%3D%3D');
+  assert.equal(env.href(), 'https://www.instagram.com/p/DfHlBCCk8pK/');
+  assert.deepEqual(env.requestedUrls(), []);
+  env.pageUrlChange('https://instagram.com/p/DfHlBCCk8pK/?exln=a&comment_id=123&exln=b&q=a%20b#reply');
+  assert.equal(env.href(), 'https://instagram.com/p/DfHlBCCk8pK/?comment_id=123&q=a%20b#reply');
+  for (const host of ['example.com', 'instagram.com.example.com', 'notinstagram.com']) {
+    const url = `https://${host}/?exln=functional`;
+    assert.equal(createUrlEnvironment(url).href(), url);
+  }
+});
+
 test('Given Bilibili 推薦追蹤網址，When 啟動與 SPA 導航，Then 移除 trackid 並保留分集與播放位置', () => {
   const env = createUrlEnvironment(
     'https://www.bilibili.com/video/BV1ekbG6PEus/?trackid=web_pegasus_0.router-web-pegasus-2479516-gfll4.1790183784079.48',
