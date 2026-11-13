@@ -174,6 +174,20 @@ function createUrlEnvironment(initialHref, options = {}) {
   };
 }
 
+test('Given Yahoo 分享追蹤參數，When 啟動與 SPA 導航，Then 本地清除並保留功能參數及網域邊界', () => {
+  const base = 'https://tw.news.yahoo.com/%E7%94%B7%E5%A4%A7%E7%94%9F-051229093.html';
+  const env = createUrlEnvironment(`${base}?link_source=ta_first_comment&taid=6af5e98bd88e4a0001656b8f`, { allowRequests: true });
+  assert.equal(env.href(), base);
+  assert.deepEqual(env.requestedSources(), []);
+  env.pageUrlChange(`${base}?page=2&link_source=one&q=a%20b&taid=one&link_source=two&taid=two&q=c%2Fd#comments`);
+  assert.equal(env.href(), `${base}?page=2&q=a%20b&q=c%2Fd#comments`);
+  assert.equal(createUrlEnvironment('https://yahoo.com/?link_source=one&taid=two').href(), 'https://yahoo.com/');
+  for (const host of ['example.com', 'notyahoo.com', 'yahoo.com.example.com']) {
+    const url = `https://${host}/?link_source=keep&taid=keep`;
+    assert.equal(createUrlEnvironment(url).href(), url);
+  }
+});
+
 test('Given Indiegogo gfmct，When 清理網址，Then 本地移除並保留功能參數與網域邊界', () => {
   const base = 'https://www.indiegogo.com/en/projects/rfidresearchgroup/proxmark5/updates/17';
   const env = createUrlEnvironment(`${base}?gfmct=8QgWrBnOhEg3_gWsHR7rso7kSbDKJPneecI1u3wkO8heL2Oysl`, { allowRequests: true });

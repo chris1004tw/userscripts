@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         移除 URL 追蹤
 // @namespace    https://chris.taipei
-// @version      0.4.13
+// @version      0.4.14
 // @description  自動移除網址中的追蹤參數，簡化分享連結並保護隱私
 // @author       chris1004tw
 // @match        *://*/*
@@ -104,6 +104,10 @@
     // 特定網域只保留可能承載功能狀態的歧義參數；hostnamePattern 必須錨定結尾以排除 lookalike。
     /** @type {SiteRule[]} */
     const SITE_RULES = [
+        {
+            hostnamePattern: /^(?:[a-z0-9-]+\.)*yahoo\.com$/i,
+            params: new Set(['link_source', 'taid'])
+        },
         {
             hostnamePattern: /^(?:[a-z0-9-]+\.)*google\.(?:(?:com|co)\.)?[a-z]{2}$|^(?:[a-z0-9-]+\.)*google\.com$/i,
             params: new Set(['source', 'ei', 'sxsrf']),
