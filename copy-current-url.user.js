@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         複製當前網址
 // @namespace    https://chris.taipei
-// @version      0.4.6
-// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Amazon.co.jp、PChome 與 Shopee 網址轉換）
+// @version      0.4.7
+// @description  按下 Ctrl+Shift+C 複製當前網址（X/Twitter、Amazon.co.jp、PChome、Shopee 與 Yahoo 新聞網址轉換）
 // @author       chris1004tw
 // @match        *://*/*
 // @noframes
@@ -266,6 +266,28 @@
     }
 
     /**
+     * 從台灣 Yahoo 新聞文章頂端分享按鈕取得官方分享網址。
+     *
+     * @param {string} url 原始文章網址。
+     * @returns {string} 唯一有效 UUID 的分享網址；缺少或衝突時保留原網址。
+     * 此函式只讀取目前 DOM，不點擊按鈕或發出請求。
+     */
+    function convertToYahooShare(url) {
+        let articleId = '';
+        for (const button of document.querySelectorAll('button[aria-label="share-link"][data-ylk]')) {
+            const data = button.getAttribute('data-ylk');
+            if (!/(?:^|;)sec:social-share(?:;|$)/.test(data) ||
+                !/(?:^|;)subsec:article-top(?:;|$)/.test(data)) continue;
+            const match = data.match(/(?:^|;)g:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:;|$)/i);
+            if (!match) return url;
+            const id = match[1].toLowerCase();
+            if (articleId && articleId !== id) return url;
+            articleId = id;
+        }
+        return articleId ? `https://tw.news.yahoo.com/share/${articleId}` : url;
+    }
+
+    /**
      * 依目前網站轉換網址後寫入剪貼簿，並顯示結果通知。
      *
      * @returns {void} 無回傳值。
@@ -295,6 +317,12 @@
             if (shortUrl !== url) {
                 url = shortUrl;
                 notificationTitle = '已複製 PChome Pancake 網址！';
+            }
+        } else if (window.location.hostname === 'tw.news.yahoo.com') {
+            const shortUrl = convertToYahooShare(url);
+            if (shortUrl !== url) {
+                url = shortUrl;
+                notificationTitle = '已複製 Yahoo 新聞分享網址！';
             }
         }
 

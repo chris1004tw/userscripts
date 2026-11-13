@@ -120,6 +120,11 @@ function elementMatches(element, selector) {
     if (normalized === 'div[role="group"]') {
       return element.tagName === 'DIV' && element.attributes.get('role') === 'group';
     }
+    if (normalized === 'button[aria-label="share-link"][data-ylk]') {
+      return element.tagName === 'BUTTON' &&
+        element.attributes.get('aria-label') === 'share-link' &&
+        element.attributes.has('data-ylk');
+    }
 
     const testIdMatch = normalized.match(/^\[data-testid="([^"]+)"\]$/);
     if (testIdMatch) return element.attributes.get('data-testid') === testIdMatch[1];
@@ -154,6 +159,7 @@ function setConnected(element, isConnected) {
  *   firstElementChild: FakeElement | null,
  *   nextElementSibling: FakeElement | null,
  *   setAttribute: (name: string, value: string) => void,
+ *   getAttribute: (name: string) => string | null,
  *   appendChild: (child: FakeElement) => FakeElement,
  *   remove: () => void,
  *   contains: (target: FakeElement) => boolean,
@@ -200,6 +206,7 @@ function createElement(tagName) {
       element.attributes.set(name, String(value));
       if (name === 'id') element.id = String(value);
     },
+    getAttribute: (name) => element.attributes.get(name) ?? null,
     appendChild: (child) => {
       child.remove();
       element.children.push(child);
@@ -674,4 +681,56 @@ test('複製通知建立一次樣式，並在顯示時間結束後移除', async
   triggerTrustedCopyShortcut(environment);
   await Promise.resolve();
   assert.equal(environment.document.head.children.length, 1);
+});
+
+test('Yahoo 分享按鈕動態出現與更新後，快捷鍵讀取目前 UUID', () => {
+  const url = 'https://tw.news.yahoo.com/article-051299093.html?source=test#news';
+  const environment = runCopyUrlScript(url);
+  triggerTrustedCopyShortcut(environment);
+  assert.equal(environment.clipboardWrites.at(-1).value, url);
+  const button = createElement('button');
+  button.setAttribute('aria-label', 'share-link');
+  environment.document.body.appendChild(button);
+  for (const uuid of [
+    '59729b8a-84f4-3854-bad8-23fe8d910e55',
+    '12345678-abcd-4321-9876-123456789abc',
+  ]) {
+    button.setAttribute('data-ylk', `g:${uuid};sec:social-share;subsec:article-top;elm:btn;slk:Copy;`);
+    triggerTrustedCopyShortcut(environment);
+    assert.equal(environment.clipboardWrites.at(-1).value, `https://tw.news.yahoo.com/share/${uuid}`);
+  }
+});
+
+test('Yahoo 無效 UUID、非文章分享區與相似網域保留原網址', () => {
+  const uuid = '59729b8a-84f4-3854-bad8-23fe8d910e55';
+  for (const [host, data] of [
+    ['tw.news.yahoo.com', `g:${uuid}oops;sec:social-share;subsec:article-top;`],
+    ['tw.news.yahoo.com', `otherg:${uuid};sec:social-share;subsec:article-top;`],
+    ['tw.news.yahoo.com', `g:${uuid};sec:recommendations;subsec:article-top;`],
+    ['tw.news.yahoo.com', `g:${uuid};sec:social-share;subsec:article-bottom;`],
+    ['tw.news.yahoo.com.evil.test', `g:${uuid};sec:social-share;subsec:article-top;`],
+    ['news.yahoo.com', `g:${uuid};sec:social-share;subsec:article-top;`],
+  ]) {
+    const url = `https://${host}/article.html?a=%20#part`;
+    const environment = runCopyUrlScript(url);
+    const button = createElement('button');
+    button.setAttribute('aria-label', 'share-link');
+    button.setAttribute('data-ylk', data);
+    environment.document.body.appendChild(button);
+    triggerTrustedCopyShortcut(environment);
+    assert.equal(environment.clipboardWrites.at(-1).value, url);
+  }
+});
+
+test('Yahoo 多篇文章分享 UUID 衝突時不猜測文章', () => {
+  const url = 'https://tw.news.yahoo.com/article.html';
+  const environment = runCopyUrlScript(url);
+  for (const uuid of ['59729b8a-84f4-3854-bad8-23fe8d910e55', '12345678-abcd-4321-9876-123456789abc']) {
+    const button = createElement('button');
+    button.setAttribute('aria-label', 'share-link');
+    button.setAttribute('data-ylk', `g:${uuid};sec:social-share;subsec:article-top;`);
+    environment.document.body.appendChild(button);
+  }
+  triggerTrustedCopyShortcut(environment);
+  assert.equal(environment.clipboardWrites.at(-1).value, url);
 });
