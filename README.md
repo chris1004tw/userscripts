@@ -18,7 +18,7 @@
 | 名稱 | 說明 | 版本 | 連&#8288;結 |
 | :--- | :--- | :---: | :--- |
 | 移除 URL 追蹤 | 自動移除網址中的追蹤參數，讓分享連結更乾淨。會保留商品選項、搜尋條件等網站正常運作需要的參數，並清除 Instagram `igsi`／`psln` 與 Bilibili `trackid` 追蹤標記；其他清理規則也會定期更新。 | 0.4.14 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/remove-url-tracker.user.js) |
-| 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製目前網址。X/Twitter 會轉成 fxTwitter 連結，Amazon.co.jp、PChome 24h 與蝦皮商品頁則會轉成較短、方便分享的網址；Threads 保留原始網址。 | 0.4.6 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
+| 複製當前網址 | 按下 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 複製目前網址。X/Twitter 會轉成 fxTwitter 連結，Amazon.co.jp、PChome 24h 與蝦皮商品頁則會轉成較短、方便分享的網址；台灣 Yahoo 新聞可取得文章識別碼時使用官方分享短網址，否則保留原網址；Threads 保留原始網址。 | 0.4.7 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/copy-current-url.user.js) |
 | 社群媒體影片音量鎖定 | 為 Facebook、Instagram、Threads、X 的影片設定預設音量與靜音狀態。可從 Tampermonkey 選單調整；目前影片仍可使用網站本身的音量滑桿，切換影片後會恢復預設音量。 | 0.1.5 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/social-media-volume-fix.user.js) |
 | Facebook&nbsp;自動最高畫質 | 播放影片時在背景選擇最高解析度，不顯示自動操作的選單，手動設定照常使用；支援中英文選單。不提供畫質選單的播放器維持原設定，最高畫質可能增加流量與緩衝時間。 | 0.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/facebook-highest-quality.user.js) |
 | Medium&nbsp;付費牆繞過 | 開啟 Medium 文章時，自動跳轉至第三方閱讀服務。可從 Tampermonkey 選單選擇 Freedium、Archive.today 或 ReadMedium，也能關閉自動跳轉。 | 0.1.1 | [安&#8288;裝](https://github.com/chris1004tw/userscripts/raw/main/bypass-medium-paywall.user.js) |
@@ -49,7 +49,7 @@
 | 腳本／文件 | 主要入口與職責 | 行為測試 |
 | :--- | :--- | :--- |
 | `remove-url-tracker.user.js` | `compileClearUrlsRules()`／`compileBraveRules()`／`compileFirefoxRules()` 將三個官方 JSON 來源統一成 provider 規則；`migrateLegacyRemoteCacheOnce()` 以版本標記一次清除八個舊快取鍵；`SITE_RULES`／`createLocalCleaningContext()`／`isLocalRemoval()` 執行 Instagram `igsi`、Bilibili `trackid` 等站點規則與本地全清快路徑；`initializeRemoteRuleSourcesOnce()`／`loadRemoteRuleSource()` 延後讀取來源並拒絕空規則或截短更新；`cleanURL()`／`cleanCurrentURL()` 保留原始 query 編碼、套用規則世代去重並處理 SPA | `tests/remove-url-tracker.test.js` |
-| `copy-current-url.user.js` | metadata 以 `@noframes` 限制頂層執行；`copyCurrentUrl()` 複製與派送，快捷鍵排除 Alt／Meta 與重複事件，Threads 保留原網址；`convertToFxTwitter()` 透過 URL API 正規化 X/Twitter 網址；`convertToAmazonShort()` 簡化 Amazon 商品網址；`convertToShopeeShort()` 僅接受數字 ID 並統一兩種商品路徑；`convertToPancake()` 轉換 PChome 商品網址；不向 X 介面注入 Icon | `tests/copy-current-url.test.js` |
+| `copy-current-url.user.js` | metadata 以 `@noframes` 限制頂層執行；`copyCurrentUrl()` 複製與派送，快捷鍵排除 Alt／Meta 與重複事件，Threads 保留原網址；`convertToFxTwitter()` 透過 URL API 正規化 X/Twitter 網址；`convertToAmazonShort()` 簡化 Amazon 商品網址；`convertToShopeeShort()` 僅接受數字 ID 並統一兩種商品路徑；`convertToPancake()` 轉換 PChome 商品網址；`convertToYahooShare()` 取得 Yahoo 官方分享網址；不向 X 介面注入 Icon | `tests/copy-current-url.test.js` |
 | `social-media-volume-fix.user.js` | metadata `@noframes` 與 runtime 防線限制頂層執行；`syncToPage()` 套用播放預設值；`getVolumeChangeCorrectionState()`／`handleMediaStateChange()` 以每影片有限 burst 與單次 descriptor 差異處理協調平台調整；`processVideoScanQueue()` 快取每節點的第一個子元素並逐幀掃描，`queueVideoScanContinuation()` 局部續接移除後的兄弟鏈 | `tests/social-media-volume-fix.test.js` |
 | `bypass-medium-paywall.user.js` | `isServiceUrl()` 服務站辨識；`redirect()` 跳轉 | `tests/bypass-medium-paywall.test.js` |
 | `threads-auto-reveal-spoiler.user.js` | metadata `@noframes` 與 runtime 防線限制頂層執行；`queueScan()` 以同一套分幀 traversal 掃描初始與動態內容；`queueScanContinuation()` 僅續接目前 active root；`isSpoilerLabel()` 以短標籤快速路徑支援六種文案；`clickIfNeeded()` 隔離單一按鈕點擊失敗 | `tests/threads-auto-reveal-spoiler.test.js` |
